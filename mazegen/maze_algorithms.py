@@ -18,19 +18,21 @@ class MazeAlgorithm(ABC):
         ]
 
     @abstractmethod
-    def generate(self, width: int, height: int) \
+    def generate(self, width: int, height: int, seed: int | None = None) \
             -> Generator[list[list[int]], None, None]:
         pass
 
     @abstractmethod
-    def final_maze(self, width: int, height: int) \
+    def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
         pass
 
 
 class DFSAlgorithm(MazeAlgorithm):
-    def generate(self, width: int, height: int) \
+    def generate(self, width: int, height: int, seed: int | None = None) \
             -> Generator[list[list[int]], None, None]:
+
+        rng = random.Random(seed)
 
         maze: list[list[int]] = [[0xF for _ in range(width)]
                                  for _ in range(height)]
@@ -51,7 +53,7 @@ class DFSAlgorithm(MazeAlgorithm):
                         neighbours.append((nx, ny, direction, opposite))
 
             if neighbours:
-                neighbour = random.choice(neighbours)
+                neighbour = rng.choice(neighbours)
 
                 maze[y][x] &= ~(1 << neighbour[2])
                 maze[neighbour[1]][neighbour[0]] &= ~(1 << neighbour[3])
@@ -63,9 +65,10 @@ class DFSAlgorithm(MazeAlgorithm):
 
             yield maze
 
-    def final_maze(self, width: int, height: int) \
+    def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
 
-        for maze_state in self.generate(width, height):
+        final_frame: list[list[int]] = []
+        for maze_state in self.generate(width, height, seed):
             final_frame = maze_state
         return final_frame
