@@ -27,6 +27,50 @@ class MazeAlgorithm(ABC):
             -> list[list[int]]:
         pass
 
+    def make_imperfect(self, maze: list[list[int]], width: int, height: int,
+                       probability: float = 0.05, seed: int | None = None) \
+            -> list[list[int]]:
+
+        rng = random.Random(seed)
+        def check_open_area(maze: list[list[int]], width: int, height: int) \
+                -> bool:
+            for sx in range(width - 2):
+                for sy in range(height - 2):
+                    is_open = True
+                    for x in range(sx, sx + 3):
+                        for y in range(sy, sy + 3):
+                            if x < sx + 2 and (maze[y][x] & (1 << self.E)):
+                                is_open = False
+                                break
+
+                            if y < sy + 2 and (maze[y][x] & (1 << self.S)):
+                                is_open = False
+                                break
+                        if not is_open:
+                            break
+
+                    if is_open:
+                        return True
+            return False
+
+        for y in range(height):
+            for x in range(width):
+                if x < width - 1 and rng.random() < probability:
+                    maze[y][x] &= ~(1 << self.E)
+                    maze[y][x + 1] &= ~(1 << self.W)
+                    if check_open_area(maze, width, height):
+                        maze[y][x] |= (1 << self.E)
+                        maze[y][x + 1] |= (1 << self.W)
+
+                if y < height - 1 and rng.random() < probability:
+                    maze[y][x] &= ~(1 << self.S)
+                    maze[y + 1][x] &= ~(1 << self.N)
+                    if check_open_area(maze, width, height):
+                        maze[y][x] |= (1 << self.S)
+                        maze[y + 1][x] |= (1 << self.N)
+
+        return maze
+
 
 class DFSAlgorithm(MazeAlgorithm):
     def generate(self, width: int, height: int, seed: int | None = None) \

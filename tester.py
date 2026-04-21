@@ -9,8 +9,9 @@ def main() -> None:
 
     try:
         map: MapConfig = parser()
-        map_tiles = gen.generate_maze(map.width, map.height)
-        draw_map(map_tiles)
+        map_tiles = gen.generate_maze(map.width, map.height, seed=42)
+        map_tiles = gen.make_imperfect(map_tiles, map.width, map.height, seed=42)
+        draw_map(map_tiles, map.width, map.height)
     except ParserError as e:
         print(f"[ERROR]: {e}")
 
