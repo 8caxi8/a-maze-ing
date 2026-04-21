@@ -1,0 +1,7 @@
+# Easy configs
+WIDTH=6
+HEIGHT=5
+ENTRY=0,4
+EXIT=2,g
+SEED=f42
+ALGORITHM=asd
