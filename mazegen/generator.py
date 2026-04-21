@@ -16,11 +16,3 @@ class MazeGenerator:
     def generate_frame(self, width: int, height: int) \
             -> Generator[list[list[int]], None, None]:
         return self._strategy.generate(width, height)
-
-
-def main() -> None:
-    pass
-
-
-if __name__ == "__main__":
-    main()

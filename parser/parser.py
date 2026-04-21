@@ -1,6 +1,6 @@
 import sys
-from map_model import Keywords, MapConfig
-from drawer import draw_map
+from .map_model import Keywords, MapConfig
+from .drawer import draw_map
 from pydantic import ValidationError
 
 
@@ -55,15 +55,3 @@ def parser() -> MapConfig:
                           "'python3 a_maze_ing.py <config_file>.txt'")
 
     return import_config(args[0])
-
-
-def main() -> None:
-    try:
-        map: MapConfig = parser()
-        draw_map()
-    except ParserError as e:
-        print(f"[ERROR]: {e}")
-
-
-if __name__ == "__main__":
-    main()

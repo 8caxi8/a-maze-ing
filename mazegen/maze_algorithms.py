@@ -27,10 +27,6 @@ class MazeAlgorithm(ABC):
             -> list[list[int]]:
         pass
 
-    def imperfect_maze(self, maze: list[list[int]], width: int, height: int,
-                       river = 0.1) \
-            -> list[list[int]]:
-
 
 class DFSAlgorithm(MazeAlgorithm):
     def generate(self, width: int, height: int) \
@@ -73,4 +69,3 @@ class DFSAlgorithm(MazeAlgorithm):
         for maze_state in self.generate(width, height):
             final_frame = maze_state
         return final_frame
-
