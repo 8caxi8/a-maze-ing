@@ -18,23 +18,65 @@ class MazeAlgorithm(ABC):
         ]
 
     @abstractmethod
-    def generate(self, width: int, height: int) \
+    def generate(self, width: int, height: int, seed: int | None = None) \
             -> Generator[list[list[int]], None, None]:
         pass
 
     @abstractmethod
-    def final_maze(self, width: int, height: int) \
+    def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
         pass
 
-    def imperfect_maze(self, maze: list[list[int]], width: int, height: int,
-                       river = 0.1) \
+    def make_imperfect(self, maze: list[list[int]], width: int, height: int,
+                       probability: float = 0.05, seed: int | None = None) \
             -> list[list[int]]:
+
+        rng = random.Random(seed)
+        def check_open_area(maze: list[list[int]], width: int, height: int) \
+                -> bool:
+            for sx in range(width - 2):
+                for sy in range(height - 2):
+                    is_open = True
+                    for x in range(sx, sx + 3):
+                        for y in range(sy, sy + 3):
+                            if x < sx + 2 and (maze[y][x] & (1 << self.E)):
+                                is_open = False
+                                break
+
+                            if y < sy + 2 and (maze[y][x] & (1 << self.S)):
+                                is_open = False
+                                break
+                        if not is_open:
+                            break
+
+                    if is_open:
+                        return True
+            return False
+
+        for y in range(height):
+            for x in range(width):
+                if x < width - 1 and rng.random() < probability:
+                    maze[y][x] &= ~(1 << self.E)
+                    maze[y][x + 1] &= ~(1 << self.W)
+                    if check_open_area(maze, width, height):
+                        maze[y][x] |= (1 << self.E)
+                        maze[y][x + 1] |= (1 << self.W)
+
+                if y < height - 1 and rng.random() < probability:
+                    maze[y][x] &= ~(1 << self.S)
+                    maze[y + 1][x] &= ~(1 << self.N)
+                    if check_open_area(maze, width, height):
+                        maze[y][x] |= (1 << self.S)
+                        maze[y + 1][x] |= (1 << self.N)
+
+        return maze
 
 
 class DFSAlgorithm(MazeAlgorithm):
-    def generate(self, width: int, height: int) \
+    def generate(self, width: int, height: int, seed: int | None = None) \
             -> Generator[list[list[int]], None, None]:
+
+        rng = random.Random(seed)
 
         maze: list[list[int]] = [[0xF for _ in range(width)]
                                  for _ in range(height)]
@@ -55,7 +97,7 @@ class DFSAlgorithm(MazeAlgorithm):
                         neighbours.append((nx, ny, direction, opposite))
 
             if neighbours:
-                neighbour = random.choice(neighbours)
+                neighbour = rng.choice(neighbours)
 
                 maze[y][x] &= ~(1 << neighbour[2])
                 maze[neighbour[1]][neighbour[0]] &= ~(1 << neighbour[3])
@@ -67,10 +109,10 @@ class DFSAlgorithm(MazeAlgorithm):
 
             yield maze
 
-    def final_maze(self, width: int, height: int) \
+    def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
 
-        for maze_state in self.generate(width, height):
+        final_frame: list[list[int]] = []
+        for maze_state in self.generate(width, height, seed):
             final_frame = maze_state
         return final_frame
-
