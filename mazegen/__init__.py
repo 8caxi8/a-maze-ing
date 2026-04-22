@@ -1,1 +1,1 @@
-from .generator import MazeGenerator # noqa
+from .generator import MazeGenerator, MazeGeneratorError # noqa
