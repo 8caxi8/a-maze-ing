@@ -1,6 +1,5 @@
 import sys
 from .map_model import Keywords, MapConfig
-from .drawer import draw_map
 from pydantic import ValidationError
 
 
@@ -35,7 +34,8 @@ def import_config(path: str) -> MapConfig:
                                       f"\n    - {available}")
                 config_values[values[0].lower()] = values[1].strip()
             try:
-                parser_config = MapConfig.model_validate(config_values)
+                parser_config: MapConfig = \
+                    MapConfig.model_validate(config_values)
             except ValidationError as e:
                 errors = '\n    - '.join(error['msg']
                                          for error in e.errors())

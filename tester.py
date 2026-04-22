@@ -1,6 +1,6 @@
+from maze_drawer import MazeDrawer
 from parser.map_model import MapConfig
 from parser.parser import ParserError, parser
-from parser.drawer import draw_map
 from mazegen import MazeGenerator
 
 
@@ -9,9 +9,10 @@ def main() -> None:
 
     try:
         map: MapConfig = parser()
-        map_tiles = gen.generate_maze(map.width, map.height, seed=42)
-        map_tiles = gen.make_imperfect(map_tiles, map.width, map.height, seed=42)
-        draw_map(map_tiles, map.width, map.height)
+        maze = gen.generate_maze(map.width, map.height)
+        #maze = gen.make_imperfect(maze, map.width, map.height, probability=1)
+        drawer = MazeDrawer(maze)
+        drawer.draw_map()
     except ParserError as e:
         print(f"[ERROR]: {e}")
 
