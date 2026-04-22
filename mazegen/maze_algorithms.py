@@ -19,7 +19,7 @@ class MazeAlgorithm(ABC):
 
     @abstractmethod
     def generate(self, width: int, height: int, seed: int | None = None) \
-            -> Generator[list[list[int]], None, None]:
+            -> Generator[tuple[list[list[int]], list[tuple[int, int]]], None, None]:
         pass
 
     @abstractmethod
@@ -79,7 +79,8 @@ class MazeAlgorithm(ABC):
 
 class DFSAlgorithm(MazeAlgorithm):
     def generate(self, width: int, height: int, seed: int | None = None) \
-            -> Generator[list[list[int]], None, None]:
+        -> Generator[
+            tuple[list[list[int]], list[tuple[int, int]]], None, None]:
 
         rng = random.Random(seed)
 
@@ -112,12 +113,12 @@ class DFSAlgorithm(MazeAlgorithm):
             else:
                 stack.pop()
 
-            yield maze
+            yield (maze, stack)
 
     def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
 
         final_frame: list[list[int]] = []
-        for maze_state in self.generate(width, height, seed):
+        for maze_state, stack in self.generate(width, height, seed):
             final_frame = maze_state
         return final_frame

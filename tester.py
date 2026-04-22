@@ -8,9 +8,9 @@ def main() -> None:
 
     try:
         map: MapConfig = parser()
-        gen = MazeGenerator(map.width, map.height)
-        drawer = MazeDrawer(gen.maze)
-        drawer.draw_map()
+        gen = MazeGenerator(map.width, map.height, 42)
+        drawer = MazeDrawer(gen)
+        drawer.start_engine()
     except ParserError as e:
         print(f"[ERROR]: {e}")
 
