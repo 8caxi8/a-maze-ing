@@ -1,6 +1,39 @@
 from abc import ABC, abstractmethod
 from typing import Generator
 import random
+from collections import deque
+
+
+def logo_42(width: int, height: int) -> set[tuple[int, int]]:
+    logo_cells: set[tuple[int, int]] = set()
+
+    if width < 9 or height < 7:
+        print("Error: Maze dimensions are too small."
+              " 42 Pattern will be omitted")
+        return logo_cells
+
+    logo_h = height // 2 - 2
+    logo_w = width // 2 - 3
+
+    for h in range(2):
+        logo_cells.add((logo_w, logo_h + h))
+    for w in range(3):
+        logo_cells.add((logo_w + w, logo_h + 2))
+    for h in range(1, 3):
+        logo_cells.add((logo_w + 2, logo_h + 2 + h))
+
+    for w in range(3):
+        logo_cells.add((logo_w + 4 + w, logo_h))
+    for h in range(1, 3):
+        logo_cells.add((logo_w + 6, logo_h + h))
+    for w in range(2):
+        logo_cells.add((logo_w + 4 + w, logo_h + 2))
+    for h in range(1, 3):
+        logo_cells.add((logo_w + 4, logo_h + 2 + h))
+    for w in range(1, 3):
+        logo_cells.add((logo_w + 4 + w, logo_h + 4))
+
+    return logo_cells
 
 
 class MazeAlgorithm(ABC):
@@ -19,7 +52,8 @@ class MazeAlgorithm(ABC):
 
     @abstractmethod
     def generate(self, width: int, height: int, seed: int | None = None) \
-            -> Generator[tuple[list[list[int]], list[tuple[int, int]]], None, None]:
+            -> Generator[tuple[list[list[int]],
+                               list[tuple[int, int]]], None, None]:
         pass
 
     @abstractmethod
@@ -32,8 +66,10 @@ class MazeAlgorithm(ABC):
 
         width: int = len(maze[0])
         height: int = len(maze)
+        logo_cells: set[tuple[int, int]] = logo_42(width, height)
 
         rng = random.Random(seed)
+
         def check_open_area(maze: list[list[int]], width: int, height: int) \
                 -> bool:
 
@@ -58,6 +94,9 @@ class MazeAlgorithm(ABC):
 
         for y in range(height):
             for x in range(width):
+                if (x, y) in logo_cells:
+                    continue
+
                 if x < width - 1 and rng.random() < probability:
                     if maze[y][x] & (1 << self.E):
                         maze[y][x] &= ~(1 << self.E)
@@ -76,11 +115,43 @@ class MazeAlgorithm(ABC):
 
         return maze
 
+    def bfs(self, maze: list[list[int]], width: int, height: int,
+            entry: tuple[int, int], exit: tuple[int, int]) \
+            -> list[tuple[int, int]]:
+
+        queue: deque[tuple[int, int]] = deque([entry])
+        visited: set[tuple[int, int]] = set([entry])
+        parent: dict[tuple[int, int], tuple[int, int] | None] = {entry: None}
+
+        while queue:
+            cell: tuple[int, int] = queue.popleft()
+
+            if (cell == exit):
+                path: list[tuple[int, int]] = []
+                current: tuple[int, int] | None = exit
+                while current is not None:
+                    path.append(current)
+                    current = parent[current]
+                return path[::-1]
+
+            for dx, dy, direction, opposite in self.DIRS:
+                nx: int = dx + cell[0]
+                ny: int = dy + cell[1]
+
+                if 0 <= nx < width and 0 <= ny < height:
+                    if (nx, ny) not in visited:
+                        if not (maze[cell[1]][cell[0]] & 1 << direction):
+                            visited.add((nx, ny))
+                            parent[(nx, ny)] = cell
+                            queue.append((nx, ny))
+
+        return []
+
 
 class DFSAlgorithm(MazeAlgorithm):
     def generate(self, width: int, height: int, seed: int | None = None) \
-        -> Generator[
-            tuple[list[list[int]], list[tuple[int, int]]], None, None]:
+            -> Generator[tuple[list[list[int]],
+                               list[tuple[int, int]]], None, None]:
 
         rng = random.Random(seed)
 
@@ -89,6 +160,9 @@ class DFSAlgorithm(MazeAlgorithm):
 
         stack: list[tuple[int, int]] = [(0, 0)]
         visited: set[tuple[int, int]] = set([(0, 0)])
+
+        for cell in logo_42(width, height):
+            visited.add(cell)
 
         while stack:
             x, y = stack[-1]
@@ -113,7 +187,7 @@ class DFSAlgorithm(MazeAlgorithm):
             else:
                 stack.pop()
 
-            yield (maze, stack)
+            yield maze, stack
 
     def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
