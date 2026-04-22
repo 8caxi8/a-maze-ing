@@ -2,9 +2,8 @@ import sys
 import tty
 import termios
 import time
-import select
-from typing import Callable
 from mazegen import MazeGenerator
+
 
 class MazeDrawer():
     BOLD = "\033[1;97m"
@@ -19,12 +18,12 @@ class MazeDrawer():
         self.generator = gen
         self.coded: list[list[int]] = gen.maze
         self.path: list[tuple[int, int]] = []
+        self.solution: list[tuple[int, int]] = []
         self.height = len(self.coded)
         self.width = len(self.coded[0])
         self.style_param = style_param
         self.color_param = color_param
         self.define_params()
-        self.command: None | Callable = self.draw_map
 
         self.MAX_COLORS = 3
         self.MAX_STYLES = 4
@@ -55,6 +54,18 @@ class MazeDrawer():
                 else:
                     self.color_param = 0
                 self.define_params()
+            if key == "p":
+                if not self.solution:
+                    temp_solution = self.generator.find_shortest_path()
+                    self.solution.append(temp_solution[0])
+                    self.solution.append(temp_solution[-1])
+                elif len(self.solution) == 2:
+                    self.solution = []
+                else:
+                    temp_solution = self.solution
+                    self.solution = []
+                    self.solution.append(temp_solution[0])
+                    self.solution.append(temp_solution[-1])
             if key == "s":
                 if self.style_param + 1 < self.MAX_STYLES:
                     self.style_param += 1
@@ -62,11 +73,23 @@ class MazeDrawer():
                     self.style_param = 0
                 self.define_params()
             if key == "g":
+                if self.solution:
+                    self.solution = []
                 frame = self.generator.generate_frame()
                 generate_maze = True
+            if key == "i":
+                self.generator.make_imperfect()
+                self.coded = self.generator.maze
+            if key == "f":
+                if not self.solution:
+                    self.solution = self.generator.find_shortest_path()
+                elif len(self.solution) == 2:
+                    self.solution = self.generator.find_shortest_path()
+                else:
+                    self.solution = []
             if key == "q":
                 break
-            time.sleep(0.05)
+            time.sleep(0.005)
 
     def draw_commands(self) -> None:
         print(" "*9, end="")
@@ -103,6 +126,7 @@ class MazeDrawer():
         print(self.BOLD + self.colors["wall"] + top_row + self.RESET)
 
     def print_mid_cells(self) -> None:
+        assert self.solution is not None
         for y in range(self.height - 1):
             cells = self.draw_set["cell_left_wall"]
             for x in range(self.width - 1):
@@ -118,6 +142,31 @@ class MazeDrawer():
                     else:
                         cells += self.colors["path"] +\
                             self.draw_set["cell_clossed"] +\
+                            self.RESET + self.BOLD +\
+                            self.colors["wall"]
+                        end = self.draw_set["cell_w_wall"].strip()\
+                            if self.coded[y][x] & (1 << self.E) else " "
+                        cells += end
+                elif (x, y) in self.solution:
+                    if (x, y) == self.solution[-1]:
+                        cells += self.colors["exit_pos"] +\
+                            self.draw_set["cell_path"] +\
+                            self.RESET + self.BOLD +\
+                            self.colors["wall"]
+                        end = self.draw_set["cell_w_wall"].strip()\
+                            if self.coded[y][x] & (1 << self.E) else " "
+                        cells += end
+                    elif (x, y) == self.solution[0]:
+                        cells += self.colors["entry_pos"] +\
+                            self.draw_set["cell_path"] +\
+                            self.RESET + self.BOLD +\
+                            self.colors["wall"]
+                        end = self.draw_set["cell_w_wall"].strip()\
+                            if self.coded[y][x] & (1 << self.E) else " "
+                        cells += end
+                    else:
+                        cells += self.colors["path"] +\
+                            self.draw_set["cell_path"] +\
                             self.RESET + self.BOLD +\
                             self.colors["wall"]
                         end = self.draw_set["cell_w_wall"].strip()\
@@ -148,6 +197,31 @@ class MazeDrawer():
                         self.RESET + self.BOLD +\
                         self.colors["wall"] +\
                         self.draw_set["cell_w_wall"].strip()
+            elif (self.width - 1, y) in self.solution:
+                if (self.width - 1, y) == self.solution[-1]:
+                    cells += self.colors["exit_pos"] +\
+                        self.draw_set["cell_path"] +\
+                        self.RESET + self.BOLD +\
+                        self.colors["wall"]
+                    end = self.draw_set["cell_w_wall"].strip()\
+                        if self.coded[y][x] & (1 << self.E) else " "
+                    cells += end
+                if (self.width - 1, y) == self.solution[0]:
+                    cells += self.colors["entry_pos"] +\
+                        self.draw_set["cell_path"] +\
+                        self.RESET + self.BOLD +\
+                        self.colors["wall"]
+                    end = self.draw_set["cell_w_wall"].strip()\
+                        if self.coded[y][x] & (1 << self.E) else " "
+                    cells += end
+                else:
+                    cells += self.colors["path"] +\
+                        self.draw_set["cell_path"] +\
+                        self.RESET + self.BOLD +\
+                        self.colors["wall"]
+                    end = self.draw_set["cell_w_wall"].strip()\
+                        if self.coded[y][x] & (1 << self.E) else " "
+                    cells += end
             elif self.coded[y][self.width - 1] & (1 << self.E) and \
                self.coded[y][self.width - 1] & (1 << self.S) and \
                self.coded[y][self.width - 1] & (1 << self.N) and \
@@ -223,6 +297,7 @@ class MazeDrawer():
             print(self.BOLD + self.colors["wall"] + mid_row + self.RESET)
 
     def print_last_cell(self) -> None:
+        assert self.solution is not None
         bot_row = self.draw_set["bot_left_corner"]
         last_cells = self.draw_set["cell_left_wall"]
 
@@ -245,6 +320,31 @@ class MazeDrawer():
                     end = self.draw_set["cell_w_wall"].strip()\
                         if self.coded[self.height - 1][x] & (1 << self.E)\
                         else " "
+                    last_cells += end
+            elif (x, self.height - 1) in self.solution:
+                if (x, self.height - 1) == self.solution[-1]:
+                    last_cells += self.colors["exit_pos"] +\
+                        self.draw_set["cell_path"] +\
+                        self.RESET + self.BOLD +\
+                        self.colors["wall"]
+                    end = self.draw_set["cell_w_wall"].strip()\
+                        if self.coded[self.height - 1][x] & (1 << self.E) else " "
+                    last_cells += end
+                elif (x, self.height - 1) == self.solution[0]:
+                    last_cells += self.colors["entry_pos"] +\
+                        self.draw_set["cell_path"] +\
+                        self.RESET + self.BOLD +\
+                        self.colors["wall"]
+                    end = self.draw_set["cell_w_wall"].strip()\
+                        if self.coded[self.height - 1][x] & (1 << self.E) else " "
+                    last_cells += end
+                else:
+                    last_cells += self.colors["path"] +\
+                        self.draw_set["cell_path"] +\
+                        self.RESET + self.BOLD +\
+                        self.colors["wall"]
+                    end = self.draw_set["cell_w_wall"].strip()\
+                        if self.coded[self.height - 1][x] & (1 << self.E) else " "
                     last_cells += end
             elif self.coded[self.height - 1][x] & (1 << self.E) and\
                self.coded[self.height - 1][x] & (1 << self.S) and\
@@ -276,6 +376,31 @@ class MazeDrawer():
                 end = self.draw_set["cell_w_wall"].strip()\
                     if self.coded[self.height - 1][self.width - 1] & (1 << self.E)\
                     else " "
+                last_cells += end
+        elif (self.width - 1, self.height - 1) in self.solution:
+            if (self.width - 1, self.height - 1) == self.solution[-1]:
+                last_cells += self.colors["exit_pos"] +\
+                    self.draw_set["cell_path"] +\
+                    self.RESET + self.BOLD +\
+                    self.colors["wall"]
+                end = self.draw_set["cell_w_wall"].strip()\
+                    if self.coded[self.height - 1][self.width - 1] & (1 << self.E) else " "
+                last_cells += end
+            if (self.width - 1, self.height - 1) == self.solution[0]:
+                last_cells += self.colors["entry_pos"] +\
+                    self.draw_set["cell_path"] +\
+                    self.RESET + self.BOLD +\
+                    self.colors["wall"]
+                end = self.draw_set["cell_w_wall"].strip()\
+                    if self.coded[self.height - 1][self.width - 1] & (1 << self.E) else " "
+                last_cells += end
+            else:
+                last_cells += self.colors["path"] +\
+                    self.draw_set["cell_path"] +\
+                    self.RESET + self.BOLD +\
+                    self.colors["wall"]
+                end = self.draw_set["cell_w_wall"].strip()\
+                    if self.coded[self.height - 1][self.width - 1] & (1 << self.E) else " "
                 last_cells += end
         elif (self.coded[self.height - 1][self.width - 1] & (1 << self.E) and
               self.coded[self.height - 1][self.width - 1] & (1 << self.S) and
@@ -327,18 +452,24 @@ class MazeDrawer():
                 "closed": "\033[91m",
                 "path": "\033[33;2m",
                 "last_pos": "\033[97m",
+                "entry_pos": "\033[92m",
+                "exit_pos": "\033[91m",
             },
             1: {
                 "wall": "\033[94m",
                 "closed": "\033[92m",
                 "path": "\033[96m",
                 "last_pos": "\033[97m",
+                "entry_pos": "\033[92m",
+                "exit_pos": "\033[91m",
             },
             2: {
                 "wall": rgb(255, 140, 0),
                 "closed": "\033[97m",
                 "path": "\033[94m",
                 "last_pos": "\033[91m",
+                "entry_pos": "\033[92m",
+                "exit_pos": "\033[91m",
             },
         }
 
@@ -357,6 +488,7 @@ class MazeDrawer():
                 "cell_w_wall": "   |",
                 "cell_no_wall": "    ",
                 "cell_clossed": "███",
+                "cell_path": " ● ",
                 "cell_right_clossed": "███",
                 "mid_s_ue_de_se_wall": "---+",
                 "mid_s_ue_de_wall": "---+",
@@ -396,6 +528,7 @@ class MazeDrawer():
                 "cell_w_wall": "   │",
                 "cell_no_wall": "    ",
                 "cell_clossed": "███",
+                "cell_path": " ● ",
                 "cell_right_clossed": "███",
                 "mid_s_ue_de_se_wall": "───┼",
                 "mid_s_ue_de_wall": "───┤",
@@ -435,6 +568,7 @@ class MazeDrawer():
                 "cell_w_wall": "   │",
                 "cell_no_wall": "    ",
                 "cell_clossed": "███",
+                "cell_path": " ● ",
                 "cell_right_clossed": "███",
                 "mid_s_ue_de_se_wall": "───┼",
                 "mid_s_ue_de_wall": "───┤",
@@ -474,6 +608,7 @@ class MazeDrawer():
                 "cell_w_wall": "   ┃",
                 "cell_no_wall": "    ",
                 "cell_clossed": "███",
+                "cell_path": " ● ",
                 "cell_right_clossed": "███",
                 "mid_s_ue_de_se_wall": "━━━╋",
                 "mid_s_ue_de_wall": "━━━┫",
@@ -502,7 +637,6 @@ class MazeDrawer():
                 "bot_right_no_wall": "   ",
                 "bot_w_wall": "━━━┻",
                 "bot_no_wall": "━━━━",
-
             }
         }
 
