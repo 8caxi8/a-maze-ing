@@ -14,9 +14,17 @@ def main() -> None:
         drawer = MazeDrawer(gen.maze)
         drawer.draw_map()
         path = gen.find_shortest_path()
+        appended: list[tuple[int, int] | None] = []
+        for cell, path_2 in gen.rev_path_frames():
+            appended.append(cell)
+            path_final = path_2
         print(path)
+        print()
+        print(path_final)
+        print()
+        print(appended)
         print(gen.get_path_directions())
-        gen.write_to_file("output.txt")
+        #gen.write_to_file("output.txt")
     except (ParserError, MazeGeneratorError) as e:
         print(f"[ERROR]: {e}")
 

@@ -61,6 +61,62 @@ class MazeAlgorithm(ABC):
             -> list[list[int]]:
         pass
 
+    def make_imperfect_frames(self, maze: list[list[int]],
+                              probability: float = 0.05,
+                              seed: int | None = None) \
+            -> Generator[list[list[int]], None, None]:
+
+        width: int = len(maze[0])
+        height: int = len(maze)
+        logo_cells: set[tuple[int, int]] = logo_42(width, height)
+
+        rng = random.Random(seed)
+
+        def check_open_area(maze: list[list[int]], width: int, height: int) \
+                -> bool:
+
+            for sx in range(width - 2):
+                for sy in range(height - 2):
+                    is_open = True
+                    for x in range(sx, sx + 3):
+                        for y in range(sy, sy + 3):
+                            if x < sx + 2 and (maze[y][x] & (1 << self.E)):
+                                is_open = False
+                                break
+
+                            if y < sy + 2 and (maze[y][x] & (1 << self.S)):
+                                is_open = False
+                                break
+                        if not is_open:
+                            break
+
+                    if is_open:
+                        return True
+            return False
+
+        for y in range(height):
+            for x in range(width):
+                if (x, y) in logo_cells:
+                    continue
+
+                if x < width - 1 and rng.random() < probability:
+                    if maze[y][x] & (1 << self.E):
+                        maze[y][x] &= ~(1 << self.E)
+                        maze[y][x + 1] &= ~(1 << self.W)
+                        if check_open_area(maze, width, height):
+                            maze[y][x] |= (1 << self.E)
+                            maze[y][x + 1] |= (1 << self.W)
+
+                if y < height - 1 and rng.random() < probability:
+                    if maze[y][x] & (1 << self.S):
+                        maze[y][x] &= ~(1 << self.S)
+                        maze[y + 1][x] &= ~(1 << self.N)
+                        if check_open_area(maze, width, height):
+                            maze[y][x] |= (1 << self.S)
+                            maze[y + 1][x] |= (1 << self.N)
+
+                yield maze
+
     def make_imperfect(self, maze: list[list[int]], probability: float = 0.05,
                        seed: int | None = None) -> list[list[int]]:
 
@@ -146,6 +202,39 @@ class MazeAlgorithm(ABC):
                             queue.append((nx, ny))
 
         return []
+
+    def bfs_animate(self, maze: list[list[int]], width: int, height: int,
+                    entry: tuple[int, int], exit: tuple[int, int]) \
+            -> Generator[tuple[tuple[int, int] | None,
+                               list[tuple[int, int]]], None, None]:
+
+        queue: deque[tuple[int, int]] = deque([entry])
+        visited: set[tuple[int, int]] = set([entry])
+        parent: dict[tuple[int, int], tuple[int, int] | None] = {entry: None}
+
+        while queue:
+            cell: tuple[int, int] = queue.popleft()
+
+            if (cell == exit):
+                path: list[tuple[int, int]] = []
+                current: tuple[int, int] | None = exit
+                while current is not None:
+                    path.append(current)
+                    current = parent[current]
+                    yield None, path
+                return None
+
+            for dx, dy, direction, opposite in self.DIRS:
+                nx: int = dx + cell[0]
+                ny: int = dy + cell[1]
+
+                if 0 <= nx < width and 0 <= ny < height:
+                    if (nx, ny) not in visited:
+                        if not (maze[cell[1]][cell[0]] & 1 << direction):
+                            visited.add((nx, ny))
+                            parent[(nx, ny)] = cell
+                            queue.append((nx, ny))
+                            yield cell, []
 
 
 class DFSAlgorithm(MazeAlgorithm):
