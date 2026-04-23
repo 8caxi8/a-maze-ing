@@ -18,6 +18,10 @@ class MazeGenerator:
     def __init__(self, width: int, height: int, entry: tuple[int, int],
                  exit: tuple[int, int], seed: int | None = None,
                  strategy: str = "DFS", perfect: bool = True) -> None:
+
+        if width < 9 or height < 7:
+            print("Error: Maze dimensions are too small."
+                  " 42 Pattern will be omitted")
         self._set_algorithm(strategy)
         self._set_maze_dimensions(width, height)
         self._set_entry_exit_positions(entry, exit)
