@@ -3,7 +3,7 @@ import tty
 import termios
 import time
 from mazegen import MazeGenerator
-from typing import Generator
+from typing import Generator, Any
 from .draw_sets import choose_drawing_set
 from .color_sets import choose_color_set
 
@@ -17,18 +17,23 @@ class MazeDrawer():
     S: int = 2
     W: int = 3
 
-    def __init__(self, gen: MazeGenerator, style_param: int = 3, color_param: int = 0):
+    def __init__(self, gen: MazeGenerator,
+                 style_param: int = 3,
+                 color_param: int = 0):
         self.generator: MazeGenerator = gen
         self.coded: list[list[int]] = gen.maze
         self.path: list[tuple[int, int]] = []
         self.solution: list[tuple[int, int]] = []
+        self.edge_positions: list[tuple[int, int]] = []
         self.height: int = len(self.coded)
         self.width: int = len(self.coded[0])
         self.style_param: int = style_param
         self.color_param: int = color_param
-        self.animating: bool = False
-        self.frame: Generator[tuple[list[list[int]], list[tuple[int, int]]],
-                              None, None] | None = None
+        self.animating_dfs: bool = False
+        self.animating_bfs: bool = False
+        self.animating_imp: bool = False
+        self.frame: Generator[Any, None, None] | None = None
+        self.imperfect: bool = False
 
         self.define_params()
 
@@ -40,31 +45,60 @@ class MazeDrawer():
 
         while True:
             print("\033[H", end="")
-            if self.animating and self.frame:
+            if self.animating_dfs and self.frame:
                 try:
                     self.coded, self.path = next(self.frame)
                 except StopIteration:
                     self.frame = None
-                    self.animating = False
+                    self.animating_dfs = False
+
+            elif self.animating_bfs and self.frame:
+                try:
+                    self.path, self.solution = next(self.frame)
+                except StopIteration:
+                    self.frame = None
+                    self.animating_bfs = False
+                    self.path = []
+
+            elif self.animating_imp and self.frame:
+                try:
+                    cell, self.coded = next(self.frame)
+                    self.path = [cell]
+                except StopIteration:
+                    self.frame = None
+                    self.animating_imp = False
+                    self.path = []
+
             self.draw_map()
 
             if not self.select_command():
                 print("\033[2J\033[H", end="")
                 break
-            time.sleep(0.005)
+            time.sleep(0.05)
 
     def draw_commands(self) -> None:
-        print(" "*9, end="")
-        line = self.draw_set["up_left_corner"] +\
-            self.draw_set["up_no_wall"] * (self.width + 6) +\
-            self.draw_set["up_right_corner"]
-        print(line)
-        print(" "*10, end="")
-        print("c -> Change Color    |    s -> Change Style   |   q -> quit")
-        print(" "*9, end="")
-        line = self.draw_set["bot_left_corner"] +\
-            self.draw_set["up_no_wall"] * (self.width + 6) +\
-            self.draw_set["bot_right_corner"]
+        wall = self.draw_set["cell_w_wall"].strip()
+        top = self.draw_set["up_no_wall"][0]
+        top_n = self.draw_set["bot_w_wall"][-1]
+        top_s = self.draw_set["up_w_wall"][-1]
+        print(" "*5, end="")
+        line = (self.draw_set["up_left_corner"] +
+                (top*4 + top_n + top*6 + top_n) +
+                (top*8 + top_s) + (top*20 + top_s)*2)
+        print(line[:-1] + self.draw_set["up_right_corner"])
+        print(" "*6, end="")
+        print(f"c. Change Color     {wall}  s. Change Style   {wall}  q. quit")
+        print(" "*6, end="")
+        print(f"i. Toggle Imperfect {wall}  f. Toggle Solution{wall}"
+              "  p. Toggle Exit/Entry")
+        print(" "*6, end="")
+        print(f"j. Animate Imperfect{wall}  o. Animate BFS    {wall}"
+              "  g. Animate DFS/PRIM")
+        print(" "*5, end="")
+        line = (self.draw_set["bot_left_corner"] +
+                ((self.draw_set["up_no_wall"] * (5) +
+                  self.draw_set["bot_w_wall"][-1]) * 3)[:-1] +
+                self.draw_set["bot_right_corner"])
         print(line)
         print()
 
@@ -100,13 +134,19 @@ class MazeDrawer():
                   self.RESET)
 
     def print_last_cells(self) -> None:
+        o_wall = self.draw_set["cell_left_wall"]
         last_cells = self.draw_set["cell_left_wall"]
         for x in range(self.width - 1):
             last_cells += self.render_cell(x, self.height - 1,
                                            is_last_col=False)
         last_cells += self.render_cell(self.width - 1, self.height - 1,
                                        is_last_col=True)
-        print(" "*20, end="")
+        print(" "*10, end="")
+        top_menu = (self.draw_set["up_left_corner"] +
+                    self.draw_set["up_no_wall"] +
+                    self.draw_set["up_no_wall"][:2] +
+                    self.draw_set["up_right_corner"] + " " * 2)
+        print(top_menu, end="")
         print(self.BOLD + self.colors["wall"] + last_cells + self.RESET)
 
         bot_row = self.draw_set["bot_left_corner"]
@@ -115,8 +155,11 @@ class MazeDrawer():
                 if self.coded[self.height - 1][x] & (1 << self.E)\
                 else self.draw_set["bot_no_wall"]
         bot_row = bot_row[:-1] + self.draw_set["bot_right_corner"]
-        print(" "*20, end="")
-        print(self.BOLD + self.colors["wall"] + bot_row + self.RESET)
+
+        print(" "*10, end="")
+        mid_menu = (o_wall + " MENU " + o_wall + self.RESET + " " * 2)
+        print(mid_menu, end="")
+        print(self.BOLD + self.colors["wall"] + bot_row + self.RESET, end="")
 
     def render_mid_row(self, y: int) -> str:
         if self.coded[y][0] & (1 << self.S):
@@ -130,7 +173,8 @@ class MazeDrawer():
             de = bool(self.coded[y + 1][x] & (1 << self.E))
             se = bool(self.coded[y][x + 1] & (1 << self.S))
 
-            key = f"mid_{'s_' if s else ''}{'ue_' if ue else ''}{'de_' if de else ''}{'se_' if se else ''}wall"
+            key = (f"mid_{'s_' if s else ''}{'ue_' if ue else ''}"
+                   f"{'de_' if de else ''}{'se_' if se else ''}wall")
             key = key.replace("__", "_")
 
             mid_row += self.draw_set.get(key, self.draw_set["mid_no_wall"])
@@ -148,13 +192,17 @@ class MazeDrawer():
         wall_char = self.draw_set["cell_w_wall"].strip() if has_east else " "
         right_wall = self.draw_set["cell_right_wall"] if is_last_col else ""
 
-        if (x, y) in self.solution:
-            if (x, y) == self.solution[-1]:
+        if (x, y) in self.edge_positions:
+            if (x, y) == self.edge_positions[-1]:
                 color = self.colors["exit_pos"]
-            elif (x,y) == self.solution[0]:
-                color = self.colors["entry_pos"]
             else:
-                color = self.colors["path"]
+                color = self.colors["entry_pos"]
+            content = self.draw_set["cell_path"]
+            border = self.draw_set["cell_left_wall"] if is_last_col\
+                else wall_char
+
+        elif (x, y) in self.solution:
+            color = self.colors["path"]
             content = self.draw_set["cell_path"]
             border = self.draw_set["cell_left_wall"] if is_last_col\
                 else wall_char
@@ -195,7 +243,9 @@ class MazeDrawer():
         self.draw_commands()
 
         key = None
-        if not self.animating:
+        if (not (self.animating_dfs or
+                 self.animating_bfs or
+                 self.animating_imp)):
             key = self.getch()
 
         if key == "c":
@@ -206,17 +256,12 @@ class MazeDrawer():
             self.define_params()
 
         elif key == "p":
-            if not self.solution:
-                temp_solution = self.generator.find_shortest_path()
-                self.solution.append(temp_solution[0])
-                self.solution.append(temp_solution[-1])
-            elif len(self.solution) == 2:
-                self.solution = []
+            if not self.edge_positions:
+                self.edge_positions.append(self.generator._entry)
+                self.edge_positions.append(self.generator._exit)
             else:
-                temp_solution = self.solution
+                self.edge_positions = []
                 self.solution = []
-                self.solution.append(temp_solution[0])
-                self.solution.append(temp_solution[-1])
 
         elif key == "s":
             if self.style_param + 1 < self.MAX_STYLES:
@@ -228,25 +273,49 @@ class MazeDrawer():
         elif key == "g":
             if self.solution:
                 self.solution = []
+            if self.edge_positions:
+                self.edge_positions = []
             self.frame = self.generator.generate_frame()
-            self.animating = True
-        
-        elif key = "o":
+            self.animating_dfs = True
+
+        elif key == "o":
             if self.solution:
                 self.solution = []
-                self.frame = self.generator
+            if not self.edge_positions:
+                self.edge_positions.append(self.generator._entry)
+                self.edge_positions.append(self.generator._exit)
+            self.frame = self.generator.path_frames()
+            self.animating_bfs = True
 
         elif key == "i":
-            self.generator.make_imperfect()
-            self.coded = self.generator.maze
+            if not self.imperfect:
+                self.generator.make_imperfect()
+                self.coded = self.generator.maze
+                self.imperfect = True
+            else:
+                self.coded = self.generator.generate_maze()
+                self.imperfect = False
+
+        elif key == "j":
+            if self.imperfect:
+                self.coded = self.generator.generate_maze()
+            if self.solution:
+                self.solution = []
+            if self.edge_positions:
+                self.edge_positions = []
+            self.frame = self.generator.make_imperfect_frames()
+            self.animating_imp = True
+            self.imperfect = True
 
         elif key == "f":
             if not self.solution:
-                self.solution = self.generator.find_shortest_path()
-            elif len(self.solution) == 2:
+                if not self.edge_positions:
+                    self.edge_positions.append(self.generator._entry)
+                    self.edge_positions.append(self.generator._exit)
                 self.solution = self.generator.find_shortest_path()
             else:
                 self.solution = []
+                self.edge_positions = []
 
         elif key == "q":
             return False
