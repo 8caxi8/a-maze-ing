@@ -19,8 +19,8 @@ class MapConfig(BaseModel):
     height: int = Field(ge=1)
     entry: tuple[int, int]
     exit: tuple[int, int]
-    output_file: str = "maze.txt"
-    perfect: bool = True
+    output_file: str
+    perfect: bool
     seed: int | None = None
     algorithm: str = "dfs"
 

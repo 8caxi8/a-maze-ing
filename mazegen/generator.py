@@ -95,7 +95,7 @@ class MazeGenerator:
                                           list[tuple[int, int]]], None, None]:
         return self._strategy.generate(self._width, self._height, self._seed)
 
-    def make_imperfect(self, probability: float = 0.05) -> None:
+    def make_imperfect(self, probability: float = 0.08) -> None:
         if not isinstance(probability, (int, float)):
             raise MazeGeneratorError("Expected probability to be of"
                                      " type float")

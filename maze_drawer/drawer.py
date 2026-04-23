@@ -41,7 +41,7 @@ class MazeDrawer():
         self.MAX_STYLES = int(choose_drawing_set(-1)["size"])
 
     def start_engine(self) -> None:
-        print("\033[2J\033[H", end="")
+        #print("\033[2J\033[H", end="")
 
         while True:
             print("\033[H", end="")
