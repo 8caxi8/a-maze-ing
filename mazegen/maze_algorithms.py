@@ -154,7 +154,8 @@ class MazeAlgorithm(ABC):
                     continue
 
                 if x < width - 1 and rng.random() < probability:
-                    if maze[y][x] & (1 << self.E):
+                    if (maze[y][x] & (1 << self.E) and
+                            (x + 1, y) not in logo_cells):
                         maze[y][x] &= ~(1 << self.E)
                         maze[y][x + 1] &= ~(1 << self.W)
                         if check_open_area(maze, width, height):
@@ -162,7 +163,8 @@ class MazeAlgorithm(ABC):
                             maze[y][x + 1] |= (1 << self.W)
 
                 if y < height - 1 and rng.random() < probability:
-                    if maze[y][x] & (1 << self.S):
+                    if (maze[y][x] & (1 << self.S) and
+                            (x, y + 1) not in logo_cells):
                         maze[y][x] &= ~(1 << self.S)
                         maze[y + 1][x] &= ~(1 << self.N)
                         if check_open_area(maze, width, height):
