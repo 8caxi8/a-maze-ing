@@ -93,9 +93,26 @@ class MazeGenerator:
         self.maze = self._strategy.make_imperfect(self.maze, probability,
                                                   self._seed)
 
+    def make_imperfect_frames(self, probability: float = 0.05) \
+            -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
+        if not isinstance(probability, (int, float)):
+            raise MazeGeneratorError("Expected probability to be of"
+                                     " type float")
+        if not (0 <= probability <= 1):
+            raise MazeGeneratorError("Probability must be between 0 and 1")
+        return self._strategy.make_imperfect_frames(self.maze, probability,
+                                                    self._seed)
+
     def find_shortest_path(self) -> list[tuple[int, int]]:
         return self._strategy.bfs(self.maze, self._width, self._height,
                                   self._entry, self._exit)
+
+    def path_frames(self) -> Generator[tuple[list[tuple[int, int]],
+                                             list[tuple[int, int]]],
+                                       None, None]:
+
+        return self._strategy.bfs_animate(self.maze, self._width, self._height,
+                                          self._entry, self._exit)
 
     def print_encoded_maze(self) -> None:
         for row in self.maze:

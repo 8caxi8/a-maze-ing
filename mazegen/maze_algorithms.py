@@ -61,6 +61,62 @@ class MazeAlgorithm(ABC):
             -> list[list[int]]:
         pass
 
+    def make_imperfect_frames(self, maze: list[list[int]],
+                              probability: float = 0.05,
+                              seed: int | None = None) \
+            -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
+
+        width: int = len(maze[0])
+        height: int = len(maze)
+        logo_cells: set[tuple[int, int]] = logo_42(width, height)
+
+        rng = random.Random(seed)
+
+        def check_open_area(maze: list[list[int]], width: int, height: int) \
+                -> bool:
+
+            for sx in range(width - 2):
+                for sy in range(height - 2):
+                    is_open = True
+                    for x in range(sx, sx + 3):
+                        for y in range(sy, sy + 3):
+                            if x < sx + 2 and (maze[y][x] & (1 << self.E)):
+                                is_open = False
+                                break
+
+                            if y < sy + 2 and (maze[y][x] & (1 << self.S)):
+                                is_open = False
+                                break
+                        if not is_open:
+                            break
+
+                    if is_open:
+                        return True
+            return False
+
+        for y in range(height):
+            for x in range(width):
+                if (x, y) in logo_cells:
+                    continue
+
+                if x < width - 1 and rng.random() < probability:
+                    if maze[y][x] & (1 << self.E):
+                        maze[y][x] &= ~(1 << self.E)
+                        maze[y][x + 1] &= ~(1 << self.W)
+                        if check_open_area(maze, width, height):
+                            maze[y][x] |= (1 << self.E)
+                            maze[y][x + 1] |= (1 << self.W)
+
+                if y < height - 1 and rng.random() < probability:
+                    if maze[y][x] & (1 << self.S):
+                        maze[y][x] &= ~(1 << self.S)
+                        maze[y + 1][x] &= ~(1 << self.N)
+                        if check_open_area(maze, width, height):
+                            maze[y][x] |= (1 << self.S)
+                            maze[y + 1][x] |= (1 << self.N)
+
+                yield (x, y), maze
+
     def make_imperfect(self, maze: list[list[int]], probability: float = 0.05,
                        seed: int | None = None) -> list[list[int]]:
 
@@ -115,16 +171,19 @@ class MazeAlgorithm(ABC):
 
         return maze
 
-    def bfs(self, maze: list[list[int]], width: int, height: int,
-            entry: tuple[int, int], exit: tuple[int, int]) \
-            -> list[tuple[int, int]]:
+    def bfs_animate(self, maze: list[list[int]], width: int, height: int,
+                    entry: tuple[int, int], exit: tuple[int, int]) \
+            -> Generator[tuple[list[tuple[int, int]],
+                               list[tuple[int, int]]], None, None]:
 
         queue: deque[tuple[int, int]] = deque([entry])
+        searched: list[tuple[int, int]] = []
         visited: set[tuple[int, int]] = set([entry])
         parent: dict[tuple[int, int], tuple[int, int] | None] = {entry: None}
 
         while queue:
             cell: tuple[int, int] = queue.popleft()
+            searched.append(cell)
 
             if (cell == exit):
                 path: list[tuple[int, int]] = []
@@ -132,7 +191,8 @@ class MazeAlgorithm(ABC):
                 while current is not None:
                     path.append(current)
                     current = parent[current]
-                return path[::-1]
+                    yield searched, path[::-1]
+                return
 
             for dx, dy, direction, opposite in self.DIRS:
                 nx: int = dx + cell[0]
@@ -145,7 +205,19 @@ class MazeAlgorithm(ABC):
                             parent[(nx, ny)] = cell
                             queue.append((nx, ny))
 
-        return []
+            yield searched, []
+
+        yield searched, []
+
+    def bfs(self, maze: list[list[int]], width: int, height: int,
+            entry: tuple[int, int], exit: tuple[int, int]) \
+            -> list[tuple[int, int]]:
+
+        final_path: list[tuple[int, int]] = []
+        for searched, path in self.bfs_animate(maze, width, height,
+                                               entry, exit):
+            final_path = path
+        return final_path
 
 
 class DFSAlgorithm(MazeAlgorithm):
