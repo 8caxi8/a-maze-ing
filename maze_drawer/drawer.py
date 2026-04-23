@@ -3,6 +3,9 @@ import tty
 import termios
 import time
 from mazegen import MazeGenerator
+from typing import Generator
+from .draw_sets import choose_drawing_set
+from .color_sets import choose_color_set
 
 
 class MazeDrawer():
@@ -15,79 +18,38 @@ class MazeDrawer():
     W: int = 3
 
     def __init__(self, gen: MazeGenerator, style_param: int = 3, color_param: int = 0):
-        self.generator = gen
+        self.generator: MazeGenerator = gen
         self.coded: list[list[int]] = gen.maze
         self.path: list[tuple[int, int]] = []
         self.solution: list[tuple[int, int]] = []
-        self.height = len(self.coded)
-        self.width = len(self.coded[0])
-        self.style_param = style_param
-        self.color_param = color_param
+        self.height: int = len(self.coded)
+        self.width: int = len(self.coded[0])
+        self.style_param: int = style_param
+        self.color_param: int = color_param
+        self.animating: bool = False
+        self.frame: Generator[tuple[list[list[int]], list[tuple[int, int]]],
+                              None, None] | None = None
+
         self.define_params()
 
-        self.MAX_COLORS = 3
-        self.MAX_STYLES = 4
+        self.MAX_COLORS = int(choose_color_set(-1)["size"])
+        self.MAX_STYLES = int(choose_drawing_set(-1)["size"])
 
     def start_engine(self) -> None:
-        generate_maze = False
-        frame = None
         print("\033[2J\033[H", end="")
 
         while True:
             print("\033[H", end="")
-            key = None
-            if generate_maze and frame:
+            if self.animating and self.frame:
                 try:
-                    self.coded, self.path = next(frame)
+                    self.coded, self.path = next(self.frame)
                 except StopIteration:
-                    frame = None
-                    generate_maze = False
+                    self.frame = None
+                    self.animating = False
             self.draw_map()
-            self.draw_commands()
 
-            if not generate_maze:
-                key = self.getch()
-
-            if key == "c":
-                if self.color_param + 1 < self.MAX_COLORS:
-                    self.color_param += 1
-                else:
-                    self.color_param = 0
-                self.define_params()
-            if key == "p":
-                if not self.solution:
-                    temp_solution = self.generator.find_shortest_path()
-                    self.solution.append(temp_solution[0])
-                    self.solution.append(temp_solution[-1])
-                elif len(self.solution) == 2:
-                    self.solution = []
-                else:
-                    temp_solution = self.solution
-                    self.solution = []
-                    self.solution.append(temp_solution[0])
-                    self.solution.append(temp_solution[-1])
-            if key == "s":
-                if self.style_param + 1 < self.MAX_STYLES:
-                    self.style_param += 1
-                else:
-                    self.style_param = 0
-                self.define_params()
-            if key == "g":
-                if self.solution:
-                    self.solution = []
-                frame = self.generator.generate_frame()
-                generate_maze = True
-            if key == "i":
-                self.generator.make_imperfect()
-                self.coded = self.generator.maze
-            if key == "f":
-                if not self.solution:
-                    self.solution = self.generator.find_shortest_path()
-                elif len(self.solution) == 2:
-                    self.solution = self.generator.find_shortest_path()
-                else:
-                    self.solution = []
-            if key == "q":
+            if not self.select_command():
+                print("\033[2J\033[H", end="")
                 break
             time.sleep(0.005)
 
@@ -111,7 +73,7 @@ class MazeDrawer():
         print()
         self.print_top_container()
         self.print_mid_cells()
-        self.print_last_cell()
+        self.print_last_cells()
         print()
 
     def print_top_container(self) -> None:
@@ -126,309 +88,169 @@ class MazeDrawer():
         print(self.BOLD + self.colors["wall"] + top_row + self.RESET)
 
     def print_mid_cells(self) -> None:
-        assert self.solution is not None
         for y in range(self.height - 1):
             cells = self.draw_set["cell_left_wall"]
             for x in range(self.width - 1):
-                if (x, y) in self.path:
-                    if (x, y) == self.path[-1]:
-                        cells += self.colors["last_pos"] +\
-                            self.draw_set["cell_clossed"] +\
-                            self.RESET + self.BOLD +\
-                            self.colors["wall"]
-                        end = self.draw_set["cell_w_wall"].strip()\
-                            if self.coded[y][x] & (1 << self.E) else " "
-                        cells += end
-                    else:
-                        cells += self.colors["path"] +\
-                            self.draw_set["cell_clossed"] +\
-                            self.RESET + self.BOLD +\
-                            self.colors["wall"]
-                        end = self.draw_set["cell_w_wall"].strip()\
-                            if self.coded[y][x] & (1 << self.E) else " "
-                        cells += end
-                elif (x, y) in self.solution:
-                    if (x, y) == self.solution[-1]:
-                        cells += self.colors["exit_pos"] +\
-                            self.draw_set["cell_path"] +\
-                            self.RESET + self.BOLD +\
-                            self.colors["wall"]
-                        end = self.draw_set["cell_w_wall"].strip()\
-                            if self.coded[y][x] & (1 << self.E) else " "
-                        cells += end
-                    elif (x, y) == self.solution[0]:
-                        cells += self.colors["entry_pos"] +\
-                            self.draw_set["cell_path"] +\
-                            self.RESET + self.BOLD +\
-                            self.colors["wall"]
-                        end = self.draw_set["cell_w_wall"].strip()\
-                            if self.coded[y][x] & (1 << self.E) else " "
-                        cells += end
-                    else:
-                        cells += self.colors["path"] +\
-                            self.draw_set["cell_path"] +\
-                            self.RESET + self.BOLD +\
-                            self.colors["wall"]
-                        end = self.draw_set["cell_w_wall"].strip()\
-                            if self.coded[y][x] & (1 << self.E) else " "
-                        cells += end
-                elif self.coded[y][x] & (1 << self.E) and \
-                   self.coded[y][x] & (1 << self.S) and \
-                   self.coded[y][x] & (1 << self.N) and \
-                   self.coded[y][x] & (1 << self.W):
-                    cells += self.colors["closed"] +\
-                     self.draw_set["cell_clossed"] +\
-                     self.RESET + self.BOLD +\
-                     self.colors["wall"] + self.draw_set["cell_w_wall"].strip()
-                elif self.coded[y][x] & (1 << self.E):
-                    cells += self.draw_set["cell_w_wall"]
-                else:
-                    cells += self.draw_set["cell_no_wall"]
-            if (self.width - 1, y) in self.path:
-                if (self.width - 1, y) == self.path[-1]:
-                    cells += self.colors["last_pos"] +\
-                        self.draw_set["cell_clossed"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"] +\
-                        self.draw_set["cell_w_wall"].strip()
-                else:
-                    cells += self.colors["path"] +\
-                        self.draw_set["cell_clossed"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"] +\
-                        self.draw_set["cell_w_wall"].strip()
-            elif (self.width - 1, y) in self.solution:
-                if (self.width - 1, y) == self.solution[-1]:
-                    cells += self.colors["exit_pos"] +\
-                        self.draw_set["cell_path"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"]
-                    end = self.draw_set["cell_w_wall"].strip()\
-                        if self.coded[y][x] & (1 << self.E) else " "
-                    cells += end
-                if (self.width - 1, y) == self.solution[0]:
-                    cells += self.colors["entry_pos"] +\
-                        self.draw_set["cell_path"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"]
-                    end = self.draw_set["cell_w_wall"].strip()\
-                        if self.coded[y][x] & (1 << self.E) else " "
-                    cells += end
-                else:
-                    cells += self.colors["path"] +\
-                        self.draw_set["cell_path"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"]
-                    end = self.draw_set["cell_w_wall"].strip()\
-                        if self.coded[y][x] & (1 << self.E) else " "
-                    cells += end
-            elif self.coded[y][self.width - 1] & (1 << self.E) and \
-               self.coded[y][self.width - 1] & (1 << self.S) and \
-               self.coded[y][self.width - 1] & (1 << self.N) and \
-               self.coded[y][self.width - 1] & (1 << self.W):
-                cells += self.colors["closed"] +\
-                    self.draw_set["cell_right_clossed"] +\
-                    self.RESET + self.BOLD +\
-                    self.colors["wall"] + self.draw_set["cell_left_wall"]
-            elif self.coded[y][self.width - 1] & (1 << self.E):
-                cells += self.draw_set["cell_right_wall"]
-            else:
-                cells += self.draw_set["cell_no_wall"]
+                cells += self.render_cell(x, y, is_last_col=False)
+            cells += self.render_cell(self.width - 1, y, is_last_col=True)
             print(" "*20, end="")
             print(self.BOLD + self.colors["wall"] + cells + self.RESET)
-
-            if self.coded[y][0] & (1 << self.S):
-                mid_row = self.draw_set["mid_left_w_wall"]
-            else:
-                mid_row = self.draw_set["mid_left_no_wall"]
-
-            for x in range(self.width - 1):
-                if self.coded[y][x] & (1 << self.S):
-                    if self.coded[y][x] & (1 << self.E):
-                        if self.coded[y + 1][x] & (1 << self.E):
-                            if self.coded[y][x + 1] & (1 << self.S):
-                                mid_row += self.draw_set["mid_s_ue_de_se_wall"]
-                            else:
-                                mid_row += self.draw_set["mid_s_ue_de_wall"]
-                        else:
-                            if self.coded[y][x + 1] & (1 << self.S):
-                                mid_row += self.draw_set["mid_s_ue_se_wall"]
-                            else:
-                                mid_row += self.draw_set["mid_s_ue_wall"]
-                    else:
-                        if self.coded[y + 1][x] & (1 << self.E):
-                            if self.coded[y][x + 1] & (1 << self.S):
-                                mid_row += self.draw_set["mid_s_de_se_wall"]
-                            else:
-                                mid_row += self.draw_set["mid_s_de_wall"]
-                        else:
-                            if self.coded[y][x + 1] & (1 << self.S):
-                                mid_row += self.draw_set["mid_s_se_wall"]
-                            else:
-                                mid_row += self.draw_set["mid_s_wall"]
-                else:
-                    if self.coded[y][x] & (1 << self.E):
-                        if self.coded[y + 1][x] & (1 << self.E):
-                            if self.coded[y][x + 1] & (1 << self.S):
-                                mid_row += self.draw_set["mid_ue_de_se_wall"]
-                            else:
-                                mid_row += self.draw_set["mid_ue_de_wall"]
-                        else:
-                            if self.coded[y][x + 1] & (1 << self.S):
-                                mid_row += self.draw_set["mid_ue_se_wall"]
-                            else:
-                                mid_row += self.draw_set["mid_ue_wall"]
-                    else:
-                        if self.coded[y + 1][x] & (1 << self.E):
-                            if self.coded[y][x + 1] & (1 << self.S):
-                                mid_row += self.draw_set["mid_de_se_wall"]
-                            else:
-                                mid_row += self.draw_set["mid_de_wall"]
-                        else:
-                            if self.coded[y][x + 1] & (1 << self.S):
-                                mid_row += self.draw_set["mid_se_wall"]
-                            else:
-                                mid_row += self.draw_set["mid_no_wall"]
-            if self.coded[y][self.width - 1] & (1 << self.S):
-                mid_row += self.draw_set["mid_right_s_wall"]
-            else:
-                mid_row += self.draw_set["mid_right_no_wall"]
             print(" "*20, end="")
-            print(self.BOLD + self.colors["wall"] + mid_row + self.RESET)
+            print(self.BOLD + self.colors["wall"] + self.render_mid_row(y) +
+                  self.RESET)
 
-    def print_last_cell(self) -> None:
-        assert self.solution is not None
-        bot_row = self.draw_set["bot_left_corner"]
+    def print_last_cells(self) -> None:
         last_cells = self.draw_set["cell_left_wall"]
-
         for x in range(self.width - 1):
-            if (x, self.height - 1) in self.path:
-                if (x, self.height - 1) == self.path[-1]:
-                    last_cells += self.colors["last_pos"] +\
-                        self.draw_set["cell_clossed"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"]
-                    end = self.draw_set["cell_w_wall"].strip()\
-                        if self.coded[self.height - 1][x] & (1 << self.E)\
-                        else " "
-                    last_cells += end
-                else:
-                    last_cells += self.colors["path"] +\
-                        self.draw_set["cell_clossed"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"]
-                    end = self.draw_set["cell_w_wall"].strip()\
-                        if self.coded[self.height - 1][x] & (1 << self.E)\
-                        else " "
-                    last_cells += end
-            elif (x, self.height - 1) in self.solution:
-                if (x, self.height - 1) == self.solution[-1]:
-                    last_cells += self.colors["exit_pos"] +\
-                        self.draw_set["cell_path"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"]
-                    end = self.draw_set["cell_w_wall"].strip()\
-                        if self.coded[self.height - 1][x] & (1 << self.E) else " "
-                    last_cells += end
-                elif (x, self.height - 1) == self.solution[0]:
-                    last_cells += self.colors["entry_pos"] +\
-                        self.draw_set["cell_path"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"]
-                    end = self.draw_set["cell_w_wall"].strip()\
-                        if self.coded[self.height - 1][x] & (1 << self.E) else " "
-                    last_cells += end
-                else:
-                    last_cells += self.colors["path"] +\
-                        self.draw_set["cell_path"] +\
-                        self.RESET + self.BOLD +\
-                        self.colors["wall"]
-                    end = self.draw_set["cell_w_wall"].strip()\
-                        if self.coded[self.height - 1][x] & (1 << self.E) else " "
-                    last_cells += end
-            elif self.coded[self.height - 1][x] & (1 << self.E) and\
-               self.coded[self.height - 1][x] & (1 << self.S) and\
-               self.coded[self.height - 1][x] & (1 << self.N) and\
-               self.coded[self.height - 1][x] & (1 << self.W):
-                last_cells += self.colors["closed"] +\
-                    self.draw_set["cell_clossed"] +\
-                    self.RESET + self.BOLD +\
-                    self.colors["wall"] + self.draw_set["cell_w_wall"].strip()
-            elif self.coded[self.height - 1][x] & (1 << self.E):
-                last_cells += self.draw_set["cell_w_wall"]
-            else:
-                last_cells += self.draw_set["cell_no_wall"]
-        if (self.width - 1, self.height - 1) in self.path:
-            if (self.width - 1, self.height - 1) == self.path[-1]:
-                last_cells += self.colors["last_pos"] +\
-                    self.draw_set["cell_clossed"] +\
-                    self.RESET + self.BOLD +\
-                    self.colors["wall"]
-                end = self.draw_set["cell_w_wall"].strip()\
-                    if self.coded[self.height - 1][self.width - 1] & (1 << self.E)\
-                    else " "
-                last_cells += end
-            else:
-                last_cells += self.colors["path"] +\
-                    self.draw_set["cell_clossed"] +\
-                    self.RESET + self.BOLD +\
-                    self.colors["wall"]
-                end = self.draw_set["cell_w_wall"].strip()\
-                    if self.coded[self.height - 1][self.width - 1] & (1 << self.E)\
-                    else " "
-                last_cells += end
-        elif (self.width - 1, self.height - 1) in self.solution:
-            if (self.width - 1, self.height - 1) == self.solution[-1]:
-                last_cells += self.colors["exit_pos"] +\
-                    self.draw_set["cell_path"] +\
-                    self.RESET + self.BOLD +\
-                    self.colors["wall"]
-                end = self.draw_set["cell_w_wall"].strip()\
-                    if self.coded[self.height - 1][self.width - 1] & (1 << self.E) else " "
-                last_cells += end
-            if (self.width - 1, self.height - 1) == self.solution[0]:
-                last_cells += self.colors["entry_pos"] +\
-                    self.draw_set["cell_path"] +\
-                    self.RESET + self.BOLD +\
-                    self.colors["wall"]
-                end = self.draw_set["cell_w_wall"].strip()\
-                    if self.coded[self.height - 1][self.width - 1] & (1 << self.E) else " "
-                last_cells += end
-            else:
-                last_cells += self.colors["path"] +\
-                    self.draw_set["cell_path"] +\
-                    self.RESET + self.BOLD +\
-                    self.colors["wall"]
-                end = self.draw_set["cell_w_wall"].strip()\
-                    if self.coded[self.height - 1][self.width - 1] & (1 << self.E) else " "
-                last_cells += end
-        elif (self.coded[self.height - 1][self.width - 1] & (1 << self.E) and
-              self.coded[self.height - 1][self.width - 1] & (1 << self.S) and
-              self.coded[self.height - 1][self.width - 1] & (1 << self.N) and
-              self.coded[self.height - 1][self.width - 1] & (1 << self.W)):
-            last_cells += self.colors["closed"] +\
-                self.draw_set["bot_right_clossed"] +\
-                self.RESET + self.BOLD +\
-                self.colors["wall"] + self.draw_set["cell_left_wall"]
-        elif self.coded[self.height - 1][self.width - 1] & (1 << self.E):
-            last_cells += self.draw_set["bot_right_wall"]
-        else:
-            last_cells += self.draw_set["bot_right_no_wall"]
+            last_cells += self.render_cell(x, self.height - 1,
+                                           is_last_col=False)
+        last_cells += self.render_cell(self.width - 1, self.height - 1,
+                                       is_last_col=True)
         print(" "*20, end="")
         print(self.BOLD + self.colors["wall"] + last_cells + self.RESET)
 
+        bot_row = self.draw_set["bot_left_corner"]
         for x in range(self.width):
-            if self.coded[self.height - 1][x] & (1 << self.E):
-                bot_row += self.draw_set["bot_w_wall"]
-            else:
-                bot_row += self.draw_set["bot_no_wall"]
+            bot_row += self.draw_set["bot_w_wall"]\
+                if self.coded[self.height - 1][x] & (1 << self.E)\
+                else self.draw_set["bot_no_wall"]
         bot_row = bot_row[:-1] + self.draw_set["bot_right_corner"]
         print(" "*20, end="")
         print(self.BOLD + self.colors["wall"] + bot_row + self.RESET)
 
+    def render_mid_row(self, y: int) -> str:
+        if self.coded[y][0] & (1 << self.S):
+            mid_row = self.draw_set["mid_left_w_wall"]
+        else:
+            mid_row = self.draw_set["mid_left_no_wall"]
+
+        for x in range(self.width - 1):
+            s = bool(self.coded[y][x] & (1 << self.S))
+            ue = bool(self.coded[y][x] & (1 << self.E))
+            de = bool(self.coded[y + 1][x] & (1 << self.E))
+            se = bool(self.coded[y][x + 1] & (1 << self.S))
+
+            key = f"mid_{'s_' if s else ''}{'ue_' if ue else ''}{'de_' if de else ''}{'se_' if se else ''}wall"
+            key = key.replace("__", "_")
+
+            mid_row += self.draw_set.get(key, self.draw_set["mid_no_wall"])
+
+        if self.coded[y][self.width - 1] & (1 << self.S):
+            mid_row += self.draw_set["mid_right_s_wall"]
+        else:
+            mid_row += self.draw_set["mid_right_no_wall"]
+
+        return mid_row
+
+    def render_cell(self, x: int, y: int, is_last_col: bool) -> str:
+        cell = self.coded[y][x]
+        has_east = bool(cell & (1 << self.E))
+        wall_char = self.draw_set["cell_w_wall"].strip() if has_east else " "
+        right_wall = self.draw_set["cell_right_wall"] if is_last_col else ""
+
+        if (x, y) in self.solution:
+            if (x, y) == self.solution[-1]:
+                color = self.colors["exit_pos"]
+            elif (x,y) == self.solution[0]:
+                color = self.colors["entry_pos"]
+            else:
+                color = self.colors["path"]
+            content = self.draw_set["cell_path"]
+            border = self.draw_set["cell_left_wall"] if is_last_col\
+                else wall_char
+
+        elif (x, y) in self.path:
+            is_last = (x, y) == self.path[-1]
+            color = self.colors["last_pos"] if is_last else self.colors["path"]
+            content = self.draw_set["cell_closed"]
+            border = self.draw_set["cell_left_wall"] if is_last_col\
+                else wall_char
+
+        elif self.is_closed(x, y):
+            color = self.colors["closed"]
+            content = self.draw_set["cell_right_closed"] if is_last_col\
+                else self.draw_set["cell_closed"]
+            border = self.draw_set["cell_left_wall"] if is_last_col\
+                else self.draw_set["cell_w_wall"].strip()
+
+        else:
+            if is_last_col:
+                return right_wall if has_east\
+                    else self.draw_set["bot_right_no_wall"]
+            return self.draw_set["cell_w_wall"] if has_east\
+                else self.draw_set["cell_no_wall"]
+
+        return (color + content +
+                self.RESET + self.BOLD + self.colors["wall"] + border)
+
+    def is_closed(self, x: int, y: int) -> bool:
+        cell = self.coded[y][x]
+        return all(cell & (1 << d) for d in [self.N, self.E, self.W, self.S])
+
     def define_params(self) -> None:
-        self.draw_set = self.choose_drawing_set(self.style_param)
-        self.colors = self.choose_color_set(self.color_param)
+        self.draw_set = choose_drawing_set(self.style_param)
+        self.colors = choose_color_set(self.color_param)
+
+    def select_command(self) -> bool:
+        self.draw_commands()
+
+        key = None
+        if not self.animating:
+            key = self.getch()
+
+        if key == "c":
+            if self.color_param + 1 < self.MAX_COLORS:
+                self.color_param += 1
+            else:
+                self.color_param = 0
+            self.define_params()
+
+        elif key == "p":
+            if not self.solution:
+                temp_solution = self.generator.find_shortest_path()
+                self.solution.append(temp_solution[0])
+                self.solution.append(temp_solution[-1])
+            elif len(self.solution) == 2:
+                self.solution = []
+            else:
+                temp_solution = self.solution
+                self.solution = []
+                self.solution.append(temp_solution[0])
+                self.solution.append(temp_solution[-1])
+
+        elif key == "s":
+            if self.style_param + 1 < self.MAX_STYLES:
+                self.style_param += 1
+            else:
+                self.style_param = 0
+            self.define_params()
+
+        elif key == "g":
+            if self.solution:
+                self.solution = []
+            self.frame = self.generator.generate_frame()
+            self.animating = True
+        
+        elif key = "o":
+            if self.solution:
+                self.solution = []
+                self.frame = self.generator
+
+        elif key == "i":
+            self.generator.make_imperfect()
+            self.coded = self.generator.maze
+
+        elif key == "f":
+            if not self.solution:
+                self.solution = self.generator.find_shortest_path()
+            elif len(self.solution) == 2:
+                self.solution = self.generator.find_shortest_path()
+            else:
+                self.solution = []
+
+        elif key == "q":
+            return False
+        return True
 
     @staticmethod
     def getch() -> str:
@@ -440,204 +262,3 @@ class MazeDrawer():
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
-
-    @staticmethod
-    def choose_color_set(param: int) -> dict[str, str]:
-        def rgb(r: int, g: int, b: int) -> str:
-            return f"\033[38;2;{r};{g};{b}m"
-
-        COLOR_SETS = {
-            0: {
-                "wall": "\033[93m",
-                "closed": "\033[91m",
-                "path": "\033[33;2m",
-                "last_pos": "\033[97m",
-                "entry_pos": "\033[92m",
-                "exit_pos": "\033[91m",
-            },
-            1: {
-                "wall": "\033[94m",
-                "closed": "\033[92m",
-                "path": "\033[96m",
-                "last_pos": "\033[97m",
-                "entry_pos": "\033[92m",
-                "exit_pos": "\033[91m",
-            },
-            2: {
-                "wall": rgb(255, 140, 0),
-                "closed": "\033[97m",
-                "path": "\033[94m",
-                "last_pos": "\033[91m",
-                "entry_pos": "\033[92m",
-                "exit_pos": "\033[91m",
-            },
-        }
-
-        return COLOR_SETS.get(param, COLOR_SETS[0])
-
-    @staticmethod
-    def choose_drawing_set(param: int) -> dict[str, str]:
-        SETS = {
-            0: {
-                "up_left_corner": "+",
-                "up_right_corner": "+",
-                "up_w_wall": "---+",
-                "up_no_wall": "---+",
-                "cell_left_wall": "|",
-                "cell_right_wall": "   |",
-                "cell_w_wall": "   |",
-                "cell_no_wall": "    ",
-                "cell_clossed": "███",
-                "cell_path": " ● ",
-                "cell_right_clossed": "███",
-                "mid_s_ue_de_se_wall": "---+",
-                "mid_s_ue_de_wall": "---+",
-                "mid_s_ue_se_wall": "---+",
-                "mid_s_ue_wall": "---+",
-                "mid_s_de_se_wall": "---+",
-                "mid_s_de_wall": "---+",
-                "mid_s_se_wall": "---+",
-                "mid_s_wall": "---+",
-                "mid_ue_de_se_wall": "   +",
-                "mid_ue_de_wall": "   +",
-                "mid_ue_se_wall": "   +",
-                "mid_ue_wall": "   +",
-                "mid_de_se_wall": "   +",
-                "mid_de_wall": "   +",
-                "mid_se_wall": "   +",
-                "mid_no_wall": "    ",
-                "mid_left_w_wall": "+",
-                "mid_left_no_wall": "+",
-                "mid_right_s_wall": "---+",
-                "mid_right_no_wall": "   +",
-                "bot_left_corner": "+",
-                "bot_right_corner": "+",
-                "bot_right_wall": "   |",
-                "bot_right_clossed": "███",
-                "bot_right_no_wall": "   ",
-                "bot_w_wall": "---+",
-                "bot_no_wall": "---+",
-            },
-            1: {
-                "up_left_corner": "┌",
-                "up_right_corner": "┐",
-                "up_w_wall": "───┬",
-                "up_no_wall": "────",
-                "cell_left_wall": "│",
-                "cell_right_wall": "   │",
-                "cell_w_wall": "   │",
-                "cell_no_wall": "    ",
-                "cell_clossed": "███",
-                "cell_path": " ● ",
-                "cell_right_clossed": "███",
-                "mid_s_ue_de_se_wall": "───┼",
-                "mid_s_ue_de_wall": "───┤",
-                "mid_s_ue_se_wall": "───┴",
-                "mid_s_ue_wall": "───┘",
-                "mid_s_de_se_wall": "───┬",
-                "mid_s_de_wall": "───┐",
-                "mid_s_se_wall": "────",
-                "mid_s_wall": "───╴",
-                "mid_ue_de_se_wall": "   ├",
-                "mid_ue_de_wall": "   │",
-                "mid_ue_se_wall": "   └",
-                "mid_ue_wall": "   ╵",
-                "mid_de_se_wall": "   ┌",
-                "mid_de_wall": "   ╷",
-                "mid_se_wall": "   ╶",
-                "mid_no_wall": "    ",
-                "mid_left_w_wall": "├",
-                "mid_left_no_wall": "│",
-                "mid_right_s_wall": "───┤",
-                "mid_right_no_wall": "   │",
-                "bot_left_corner": "└",
-                "bot_right_corner": "┘",
-                "bot_right_wall": "   │",
-                "bot_right_clossed": "███",
-                "bot_right_no_wall": "   ",
-                "bot_w_wall": "───┴",
-                "bot_no_wall": "────",
-            },
-            2: {
-                "up_left_corner": "╔",
-                "up_right_corner": "╗",
-                "up_w_wall": "═══╦",
-                "up_no_wall": "════",
-                "cell_left_wall": "║",
-                "cell_right_wall": "   ║",
-                "cell_w_wall": "   │",
-                "cell_no_wall": "    ",
-                "cell_clossed": "███",
-                "cell_path": " ● ",
-                "cell_right_clossed": "███",
-                "mid_s_ue_de_se_wall": "───┼",
-                "mid_s_ue_de_wall": "───┤",
-                "mid_s_ue_se_wall": "───┴",
-                "mid_s_ue_wall": "───┘",
-                "mid_s_de_se_wall": "───┬",
-                "mid_s_de_wall": "───┐",
-                "mid_s_se_wall": "────",
-                "mid_s_wall": "───╴",
-                "mid_ue_de_se_wall": "   ├",
-                "mid_ue_de_wall": "   │",
-                "mid_ue_se_wall": "   └",
-                "mid_ue_wall": "   ╵",
-                "mid_de_se_wall": "   ┌",
-                "mid_de_wall": "   ╷",
-                "mid_se_wall": "   ╶",
-                "mid_no_wall": "    ",
-                "mid_left_w_wall": "╠",
-                "mid_left_no_wall": "║",
-                "mid_right_s_wall": "───╣",
-                "mid_right_no_wall": "   ║",
-                "bot_left_corner": "╚",
-                "bot_right_corner": "╝",
-                "bot_right_wall": "   ║",
-                "bot_right_clossed": "███",
-                "bot_right_no_wall": "   ",
-                "bot_w_wall": "═══╩",
-                "bot_no_wall": "════",
-            },
-            3: {
-                "up_left_corner": "┏",
-                "up_right_corner": "┓",
-                "up_w_wall": "━━━┳",
-                "up_no_wall": "━━━━",
-                "cell_left_wall": "┃",
-                "cell_right_wall": "   ┃",
-                "cell_w_wall": "   ┃",
-                "cell_no_wall": "    ",
-                "cell_clossed": "███",
-                "cell_path": " ● ",
-                "cell_right_clossed": "███",
-                "mid_s_ue_de_se_wall": "━━━╋",
-                "mid_s_ue_de_wall": "━━━┫",
-                "mid_s_ue_se_wall": "━━━┻",
-                "mid_s_ue_wall": "━━━┛",
-                "mid_s_de_se_wall": "━━━┳",
-                "mid_s_de_wall": "━━━┓",
-                "mid_s_se_wall": "━━━━",
-                "mid_s_wall": "━━━━",
-                "mid_ue_de_se_wall": "   ┣",
-                "mid_ue_de_wall": "   ┃",
-                "mid_ue_se_wall": "   ┗",
-                "mid_ue_wall": "   ┃",
-                "mid_de_se_wall": "   ┏",
-                "mid_de_wall": "   ┃",
-                "mid_se_wall": "    ",
-                "mid_no_wall": "    ",
-                "mid_left_w_wall": "┣",
-                "mid_left_no_wall": "┃",
-                "mid_right_s_wall": "━━━┫",
-                "mid_right_no_wall": "   ┃",
-                "bot_left_corner": "┗",
-                "bot_right_corner": "┛",
-                "bot_right_wall": "   ┃",
-                "bot_right_clossed": "███",
-                "bot_right_no_wall": "   ",
-                "bot_w_wall": "━━━┻",
-                "bot_no_wall": "━━━━",
-            }
-        }
-
-        return SETS.get(param, SETS[3])
