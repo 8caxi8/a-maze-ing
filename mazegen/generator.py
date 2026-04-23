@@ -19,11 +19,12 @@ class MazeGenerator:
                  exit: tuple[int, int], seed: int | None = None,
                  strategy: str = "DFS", perfect: bool = True) -> None:
 
+        self._set_algorithm(strategy)
+        self._set_maze_dimensions(width, height)
         if width < 9 or height < 7:
             print("Error: Maze dimensions are too small."
                   " 42 Pattern will be omitted")
-        self._set_algorithm(strategy)
-        self._set_maze_dimensions(width, height)
+
         self._set_entry_exit_positions(entry, exit)
         if not isinstance(seed, int | None):
             raise MazeGeneratorError("Seed must be an integer")
@@ -46,6 +47,9 @@ class MazeGenerator:
                                  f" than 1, got ({width}, {height})")
         except ValueError as e:
             raise MazeGeneratorError(e)
+
+        if width == 1 and height == 1:
+            raise MazeGeneratorError("Maze too small")
         self._width = width
         self._height = height
 
@@ -79,6 +83,10 @@ class MazeGenerator:
                   (0 <= exit[1] < self._height)):
             raise MazeGeneratorError("Exit point is out of maze bounds")
 
+        if entry == exit:
+            raise MazeGeneratorError("Entry point must not coincide with"
+                                     " Exit point")
+
         self._entry = entry
         self._exit = exit
 
@@ -90,6 +98,12 @@ class MazeGenerator:
             raise MazeGeneratorError(f"Strategy '{strategy}' not found. "
                                      "Available Strategies are:\n   - "
                                      f"{availables}")
+
+    def swap_algorithm(self) -> None:
+        if isinstance(self._strategy, DFSAlgorithm):
+            self._strategy = PRIMSAlgorithm()
+        elif isinstance(self._strategy, PRIMSAlgorithm):
+            self._strategy = DFSAlgorithm()
 
     def generate_maze(self) -> None:
         self.maze = self._strategy.final_maze(self._width, self._height,
