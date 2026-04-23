@@ -276,6 +276,7 @@ class PRIMSAlgorithm(MazeAlgorithm):
                            list[tuple[int, int]]], None, None]:
         rng = random.Random(seed)
 
+        logo_cells: set[tuple[int, int]] = logo_42(width, height)
         maze: list[list[int]] = [[0xF for _ in range(width)]
                                  for _ in range(height)]
 
@@ -302,11 +303,12 @@ class PRIMSAlgorithm(MazeAlgorithm):
                 ny = y + dy
 
                 if 0 <= nx < width and 0 <= ny < height:
-                    if (nx, ny) in visited:
+                    if (nx, ny) in visited and (nx, ny) not in logo_cells:
                         visited_neighbours.append((nx, ny,
                                                    direction, opposite))
 
             if visited_neighbours:
+
                 neighbour = rng.choice(visited_neighbours)
                 maze[y][x] &= ~(1 << neighbour[2])
                 maze[neighbour[1]][neighbour[0]] &= ~(1 << neighbour[3])
@@ -317,10 +319,11 @@ class PRIMSAlgorithm(MazeAlgorithm):
                     nny = y + dy
                     if 0 <= nnx < width and 0 <= nny < height:
                         if ((nnx, nny) not in visited
-                                and (nnx, nny) not in candidates):
+                                and (nnx, nny) not in candidates
+                                and (nnx, nny) not in logo_cells):
                             candidates.append((nnx, nny))
 
-            candidates.remove((x, y))
+                candidates.remove((x, y))
 
             yield maze, candidates
 
