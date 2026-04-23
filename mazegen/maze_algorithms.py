@@ -268,3 +268,66 @@ class DFSAlgorithm(MazeAlgorithm):
         for maze_state, stack in self.generate(width, height, seed):
             final_frame = maze_state
         return final_frame
+
+
+class PRIMSAlgorithm(MazeAlgorithm):
+    def generate(self, width: int, height: int, seed: int | None = None) \
+        -> Generator[tuple[list[list[int]],
+                           list[tuple[int, int]]], None, None]:
+        rng = random.Random(seed)
+
+        maze: list[list[int]] = [[0xF for _ in range(width)]
+                                 for _ in range(height)]
+
+        visited: set[tuple[int, int]] = set([(0, 0)])
+        candidates: list[tuple[int, int]] = []
+
+        for cell in logo_42(width, height):
+            visited.add(cell)
+
+        for dx, dy, direction, opposite in self.DIRS:
+            nx = dx
+            ny = dy
+
+            if 0 <= nx < width and 0 <= ny < height:
+                if (nx, ny) not in visited:
+                    candidates.append((nx, ny))
+
+        while candidates:
+            x, y = rng.choice(candidates)
+
+            visited_neighbours: list[tuple[int, int, int, int]] = []
+            for dx, dy, direction, opposite in self.DIRS:
+                nx = x + dx
+                ny = y + dy
+
+                if 0 <= nx < width and 0 <= ny < height:
+                    if (nx, ny) in visited:
+                        visited_neighbours.append((nx, ny,
+                                                   direction, opposite))
+
+            if visited_neighbours:
+                neighbour = rng.choice(visited_neighbours)
+                maze[y][x] &= ~(1 << neighbour[2])
+                maze[neighbour[1]][neighbour[0]] &= ~(1 << neighbour[3])
+                visited.add((x, y))
+
+                for dx, dy, direction, opposite in self.DIRS:
+                    nnx = x + dx
+                    nny = y + dy
+                    if 0 <= nnx < width and 0 <= nny < height:
+                        if ((nnx, nny) not in visited
+                                and (nnx, nny) not in candidates):
+                            candidates.append((nnx, nny))
+
+            candidates.remove((x, y))
+
+            yield maze, candidates
+
+    def final_maze(self, width: int, height: int, seed: int | None = None) \
+            -> list[list[int]]:
+
+        final_frame: list[list[int]] = []
+        for maze_state, stack in self.generate(width, height, seed):
+            final_frame = maze_state
+        return final_frame

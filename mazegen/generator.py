@@ -1,5 +1,5 @@
 from typing import Generator
-from .maze_algorithms import MazeAlgorithm, DFSAlgorithm
+from .maze_algorithms import MazeAlgorithm, DFSAlgorithm, PRIMSAlgorithm
 from .maze_algorithms import logo_42
 
 
@@ -11,11 +11,12 @@ class MazeGenerator:
 
     available_algos: dict[str, type[MazeAlgorithm]] = {
         "DFS": DFSAlgorithm,
+        "PRIM": PRIMSAlgorithm,
         }
 
     def __init__(self, width: int, height: int, entry: tuple[int, int],
                  exit: tuple[int, int], seed: int | None = None,
-                 strategy: str = "DFS") -> None:
+                 strategy: str = "DFS", perfect: bool = True) -> None:
         self.set_algorithm(strategy)
         self.set_maze_dimensions(width, height)
         self.set_entry_exit_positions(entry, exit)
@@ -23,6 +24,8 @@ class MazeGenerator:
             raise MazeGeneratorError("Seed must be an integer")
         self._seed = seed
         self.maze: list[list[int]] = self.generate_maze()
+        if not perfect:
+            self.maze = self.make_imperfect()
 
     def set_maze_dimensions(self, width: int, height: int) -> None:
         try:
@@ -83,15 +86,15 @@ class MazeGenerator:
                                           list[tuple[int, int]]], None, None]:
         return self._strategy.generate(self._width, self._height, self._seed)
 
-    def make_imperfect(self, probability: float = 0.05) -> None:
+    def make_imperfect(self, probability: float = 0.05) -> list[list[int]]:
         if not isinstance(probability, (int, float)):
             raise MazeGeneratorError("Expected probability to be of"
                                      " type float")
         if not (0 <= probability <= 1):
             raise MazeGeneratorError("Probability must be between 0 and 1")
 
-        self.maze = self._strategy.make_imperfect(self.maze, probability,
-                                                  self._seed)
+        return self._strategy.make_imperfect(self.maze, probability,
+                                             self._seed)
 
     def make_imperfect_frames(self, probability: float = 0.05) \
             -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
@@ -137,6 +140,9 @@ class MazeGenerator:
 
         result: str = "".join(path_directions)
         return result
+
+    def get_entry_exit_positions(self) -> list[tuple[int, int]]:
+        return [self._entry, self._exit]
 
     def write_to_file(self, filename: str) -> None:
         try:
