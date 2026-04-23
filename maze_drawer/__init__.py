@@ -1,1 +1,1 @@
-from .drawer import MazeDrawer # noqa
+from .drawer import MazeDrawer, DrawerError # noqa

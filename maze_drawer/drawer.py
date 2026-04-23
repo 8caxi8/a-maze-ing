@@ -2,10 +2,15 @@ import sys
 import tty
 import termios
 import time
+import shutil
 from mazegen import MazeGenerator
 from typing import Generator, Any
 from .draw_sets import choose_drawing_set
 from .color_sets import choose_color_set
+
+
+class DrawerError(Exception):
+    pass
 
 
 class MazeDrawer():
@@ -24,7 +29,8 @@ class MazeDrawer():
         self.coded: list[list[int]] = gen.maze
         self.path: list[tuple[int, int]] = []
         self.solution: list[tuple[int, int]] = []
-        self.edge_positions: list[tuple[int, int]] = []
+        self.edge_positions: list[tuple[int, int]] =\
+            gen.get_entry_exit_positions()
         self.height: int = len(self.coded)
         self.width: int = len(self.coded[0])
         self.style_param: int = style_param
@@ -33,15 +39,26 @@ class MazeDrawer():
         self.animating_bfs: bool = False
         self.animating_imp: bool = False
         self.frame: Generator[Any, None, None] | None = None
-        self.imperfect: bool = gen.get_perfect_status()
+        self.perfect: bool = gen.get_perfect_status()
 
         self.define_params()
 
         self.MAX_COLORS = int(choose_color_set(-1)["size"])
         self.MAX_STYLES = int(choose_drawing_set(-1)["size"])
 
+        self.check_terminal_size()
+
+    def check_terminal_size(self) -> None:
+        cols, rows = shutil.get_terminal_size()
+        rendered_maze_width = 20 + self.width * 4 + 1
+        render_cols = 69 if 69 > rendered_maze_width else rendered_maze_width
+        render_rows = 2 + self.height * 2 + 6
+
+        if render_cols > cols or render_rows > rows:
+            raise DrawerError("Terminal size too smal to render the maze!")
+
     def start_engine(self) -> None:
-        #print("\033[2J\033[H", end="")
+        print("\033[2J\033[H", end="")
 
         while True:
             print("\033[H", end="")
@@ -70,6 +87,7 @@ class MazeDrawer():
                     self.frame = None
                     self.animating_imp = False
                     self.path = []
+                    self.generator.make_imperfect()
 
             self.draw_map()
 
@@ -106,7 +124,6 @@ class MazeDrawer():
 
     def draw_map(self) -> None:
         print("\n"*2)
-        print()
         self.print_top_container()
         self.print_mid_cells()
         self.print_last_cells()
@@ -159,7 +176,8 @@ class MazeDrawer():
         bot_row = bot_row[:-1] + self.draw_set["bot_right_corner"]
 
         print(" "*10, end="")
-        mid_menu = (o_wall + self.BOLD + " MENU " + self.RESET + o_wall + self.RESET + " " * 2)
+        mid_menu = (o_wall + self.BOLD + " MENU " +
+                    self.RESET + o_wall + self.RESET + " " * 2)
         print(mid_menu, end="")
         print(self.BOLD + self.colors["wall"] + bot_row + self.RESET, end="")
 
@@ -290,18 +308,18 @@ class MazeDrawer():
             self.animating_bfs = True
 
         elif key == "i":
-            if not self.imperfect:
+            if self.perfect:
                 self.generator.make_imperfect()
                 self.coded = self.generator.maze
-                self.imperfect = True
+                self.perfect = False
             else:
                 self.generator.generate_maze()
                 self.coded = self.generator.maze
-                self.imperfect = False
+                self.perfect = True
 
         elif key == "j":
-            if self.imperfect:
-                self.coded = self.generator.generate_maze()
+            if not self.perfect:
+                self.generator.generate_maze()
             if self.solution:
                 self.solution = []
             if self.edge_positions:
@@ -319,6 +337,9 @@ class MazeDrawer():
             else:
                 self.solution = []
                 self.edge_positions = []
+
+        elif key == "w":
+            pass
 
         elif key == "q":
             return False

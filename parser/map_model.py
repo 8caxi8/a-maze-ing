@@ -41,6 +41,11 @@ class MapConfig(BaseModel):
                      "Exit point must be a value "
                      "betweem (0,0) and (width, height)!")
 
+        if self.entry == self.exit:
+            raise Pe("entry_exit_point_error",
+                     "Exit point must be a value "
+                     "difernt then the Entry point!")
+
         return self
 
     @field_validator("entry", "exit", mode="before")

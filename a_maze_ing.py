@@ -1,4 +1,4 @@
-from maze_drawer import MazeDrawer
+from maze_drawer import MazeDrawer, DrawerError
 from parser.map_model import MapConfig
 from parser.parser import ParserError, parser
 from mazegen import MazeGenerator, MazeGeneratorError
@@ -28,7 +28,7 @@ def main() -> None:
         #print(appended)
         print(gen.get_path_directions())
         #gen.write_to_file("output.txt")
-    except (ParserError, MazeGeneratorError) as e:
+    except (ParserError, MazeGeneratorError, DrawerError) as e:
         print(f"[ERROR]: {e}")
 
 

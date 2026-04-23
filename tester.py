@@ -1,4 +1,4 @@
-from maze_drawer import MazeDrawer
+from maze_drawer import MazeDrawer, DrawerError
 from parser.map_model import MapConfig
 from parser.parser import ParserError, parser
 from mazegen import MazeGenerator, MazeGeneratorError
@@ -12,7 +12,7 @@ def main() -> None:
                             map.exit, map.seed, map.algorithm)
         drawer = MazeDrawer(gen)
         drawer.start_engine()
-    except (ParserError, MazeGeneratorError) as e:
+    except (ParserError, MazeGeneratorError, DrawerError) as e:
         print(f"[ERROR]: {e}")
 
 
