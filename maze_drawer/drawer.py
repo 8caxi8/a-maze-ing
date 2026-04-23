@@ -41,6 +41,7 @@ class MazeDrawer():
         self.frame: Generator[Any, None, None] | None = None
         self.perfect: bool = gen.get_perfect_status()
         self.draw_speed: float = 5 / (self.height * self.width)
+        self.show_configs: bool = False
 
         self.define_params()
 
@@ -59,6 +60,10 @@ class MazeDrawer():
             raise DrawerError("Terminal size too smal to render the maze!")
 
     def start_engine(self) -> None:
+        print("Starting Engine ...")
+        time.sleep(2)
+        print("Loading assets...")
+        time.sleep(0.5)
         print("\033[2J\033[H", end="")
 
         while True:
@@ -91,11 +96,35 @@ class MazeDrawer():
                     self.generator.make_imperfect()
 
             self.draw_map()
+            self.draw_commands()
+            if self.show_configs:
+                self.draw_configs()
+            else:
+                for _ in range(7):
+                    print(" "*50)
 
             if not self.select_command():
                 print("\033[2J\033[H", end="")
                 break
+
             time.sleep(self.draw_speed)
+
+    def draw_configs(self) -> None:
+        wall = self.draw_set["cell_left_wall"]
+        print(" "*10, end="")
+        print(f"{wall} Maze Dimensions: ({self.width}, {self.height})")
+        print(" "*10, end="")
+        positions = self.generator.get_entry_exit_positions()
+        print(f"{wall} Entry Point: {positions[0]}")
+        print(" "*10, end="")
+        print(f"{wall} Exit Point: {positions[1]}")
+        print(" "*10, end="")
+        print(f"{wall} SEED: {self.generator._seed}")
+        print(" "*10, end="")
+        print(f"{wall} Algorithm used: {self.generator._strategy.__class__.__name__}")
+        print(" "*10, end="")
+        print(f"{wall} Perfect: {self.perfect}")
+        print(" "*10 + self.draw_set["bot_left_corner"])
 
     def draw_commands(self) -> None:
         wall = self.draw_set["cell_w_wall"].strip()
@@ -121,7 +150,6 @@ class MazeDrawer():
                   self.draw_set["bot_w_wall"][-1]) * 3)[:-1] +
                 self.draw_set["bot_right_corner"])
         print(line)
-        print()
 
     def draw_map(self) -> None:
         print("\n"*2)
@@ -261,8 +289,6 @@ class MazeDrawer():
         self.colors = choose_color_set(self.color_param)
 
     def select_command(self) -> bool:
-        self.draw_commands()
-
         key = None
         if (not (self.animating_dfs or
                  self.animating_bfs or
@@ -312,10 +338,14 @@ class MazeDrawer():
             if self.perfect:
                 self.generator.make_imperfect()
                 self.coded = self.generator.maze
+                if self.solution:
+                    self.solution = self.generator.find_shortest_path()
                 self.perfect = False
             else:
                 self.generator.generate_maze()
                 self.coded = self.generator.maze
+                if self.solution:
+                    self.solution = self.generator.find_shortest_path()
                 self.perfect = True
 
         elif key == "j":
@@ -347,6 +377,9 @@ class MazeDrawer():
             self.coded = self.generator.maze
             if self.solution:
                 self.solution = self.generator.find_shortest_path()
+
+        elif key == "y":
+            self.show_configs = not self.show_configs
 
         elif key == "q":
             return False
