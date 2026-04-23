@@ -1,6 +1,7 @@
 from typing import Generator
 from .maze_algorithms import MazeAlgorithm, DFSAlgorithm, PRIMSAlgorithm
 from .maze_algorithms import logo_42
+import random
 
 
 class MazeGeneratorError(Exception):
@@ -17,17 +18,24 @@ class MazeGenerator:
     def __init__(self, width: int, height: int, entry: tuple[int, int],
                  exit: tuple[int, int], seed: int | None = None,
                  strategy: str = "DFS", perfect: bool = True) -> None:
-        self.set_algorithm(strategy)
-        self.set_maze_dimensions(width, height)
-        self.set_entry_exit_positions(entry, exit)
+        self._set_algorithm(strategy)
+        self._set_maze_dimensions(width, height)
+        self._set_entry_exit_positions(entry, exit)
         if not isinstance(seed, int | None):
             raise MazeGeneratorError("Seed must be an integer")
+        if seed is None:
+            seed = random.randint(0, 2**32 - 1)
         self._seed = seed
-        self.maze: list[list[int]] = self.generate_maze()
+        self._perfect: bool = perfect
+        self.maze: list[list[int]] = []
+        self.generate_maze()
         if not perfect:
-            self.maze = self.make_imperfect()
+            self.make_imperfect()
 
-    def set_maze_dimensions(self, width: int, height: int) -> None:
+    def get_perfect_status(self) -> bool:
+        return self._perfect
+
+    def _set_maze_dimensions(self, width: int, height: int) -> None:
         try:
             if int(width) < 1 or int(height) < 1:
                 raise ValueError("Expected maze dimensions to be higher"
@@ -37,8 +45,8 @@ class MazeGenerator:
         self._width = width
         self._height = height
 
-    def set_entry_exit_positions(self, entry: tuple[int, int],
-                                 exit: tuple[int, int]) -> None:
+    def _set_entry_exit_positions(self, entry: tuple[int, int],
+                                  exit: tuple[int, int]) -> None:
         logo_cells: set[tuple[int, int]] = logo_42(self._width, self._height)
 
         if not (isinstance(entry, tuple) and
@@ -70,7 +78,7 @@ class MazeGenerator:
         self._entry = entry
         self._exit = exit
 
-    def set_algorithm(self, strategy: str) -> None:
+    def _set_algorithm(self, strategy: str) -> None:
         availables = ("\n   - ").join(self.available_algos.keys())
         try:
             self._strategy: MazeAlgorithm = self.available_algos[strategy]()
@@ -79,22 +87,23 @@ class MazeGenerator:
                                      "Available Strategies are:\n   - "
                                      f"{availables}")
 
-    def generate_maze(self) -> list[list[int]]:
-        return self._strategy.final_maze(self._width, self._height, self._seed)
+    def generate_maze(self) -> None:
+        self.maze = self._strategy.final_maze(self._width, self._height,
+                                              self._seed)
 
     def generate_frame(self) -> Generator[tuple[list[list[int]],
                                           list[tuple[int, int]]], None, None]:
         return self._strategy.generate(self._width, self._height, self._seed)
 
-    def make_imperfect(self, probability: float = 0.05) -> list[list[int]]:
+    def make_imperfect(self, probability: float = 0.05) -> None:
         if not isinstance(probability, (int, float)):
             raise MazeGeneratorError("Expected probability to be of"
                                      " type float")
         if not (0 <= probability <= 1):
             raise MazeGeneratorError("Probability must be between 0 and 1")
 
-        return self._strategy.make_imperfect(self.maze, probability,
-                                             self._seed)
+        self.maze = self._strategy.make_imperfect(self.maze, probability,
+                                                  self._seed)
 
     def make_imperfect_frames(self, probability: float = 0.05) \
             -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
