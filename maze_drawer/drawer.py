@@ -33,7 +33,7 @@ class MazeDrawer():
         self.animating_bfs: bool = False
         self.animating_imp: bool = False
         self.frame: Generator[Any, None, None] | None = None
-        self.imperfect: bool = False
+        self.imperfect: bool = gen.get_perfect_status()
 
         self.define_params()
 
@@ -51,6 +51,8 @@ class MazeDrawer():
                 except StopIteration:
                     self.frame = None
                     self.animating_dfs = False
+                    if self.imperfect:
+                        self.coded = self.generator.maze
 
             elif self.animating_bfs and self.frame:
                 try:
