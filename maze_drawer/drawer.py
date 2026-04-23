@@ -293,7 +293,8 @@ class MazeDrawer():
                 self.coded = self.generator.maze
                 self.imperfect = True
             else:
-                self.coded = self.generator.generate_maze()
+                self.generator.generate_maze()
+                self.coded = self.generator.maze
                 self.imperfect = False
 
         elif key == "j":
