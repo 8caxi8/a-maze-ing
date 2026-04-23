@@ -9,25 +9,10 @@ def main() -> None:
     try:
         map: MapConfig = parser()
         gen = MazeGenerator(map.width, map.height, map.entry,
-                            map.exit, 42, map.algorithm)
-        gen.print_encoded_maze()
-        gen.make_imperfect()
-        drawer = MazeDrawer(gen.maze)
-        drawer.draw_map()
-        path = gen.find_shortest_path()
-        appended: list[tuple[int, int]] = []
-        for searched, path_2 in gen.path_frames():
-            appended = searched
-            print(appended)
-            print()
-            path_final = path_2
-        print(path)
-        print()
-        print(path_final)
-        print()
-        #print(appended)
-        print(gen.get_path_directions())
-        #gen.write_to_file("output.txt")
+                            map.exit, map.seed, map.algorithm)
+        gen.write_to_file(map.output_file)
+        drawer = MazeDrawer(gen)
+        drawer.start_engine()
     except (ParserError, MazeGeneratorError, DrawerError) as e:
         print(f"[ERROR]: {e}")
 

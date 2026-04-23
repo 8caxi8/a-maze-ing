@@ -123,7 +123,7 @@ class MazeGenerator:
         self.maze = self._strategy.make_imperfect(self.maze, probability,
                                                   self._seed)
 
-    def make_imperfect_frames(self, probability: float = 0.05) \
+    def make_imperfect_frames(self, probability: float = 0.08) \
             -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
         if not isinstance(probability, (int, float)):
             raise MazeGeneratorError("Expected probability to be of"

@@ -1,13 +1,15 @@
 MAIN = a_maze_ing.py
+FILE = config.txt
 
 install:
-	uv sync
+	@which uv > /dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
+	@export PATH="$$HOME/.local/bin:$$PATH" && uv sync
 
 run:
-	uv run python3 $(MAIN)
+	uv run python3 $(MAIN) $(FILE)
 
 debug:
-	uv run python3 pdb $(MAIN)
+	uv run python3 -m pdb $(MAIN) $(FILE)
 
 clean:
 	find . -name "__pycache__" -print -exec rm -rf {} +

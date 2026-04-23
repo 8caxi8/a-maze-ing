@@ -40,6 +40,7 @@ class MazeDrawer():
         self.animating_imp: bool = False
         self.frame: Generator[Any, None, None] | None = None
         self.perfect: bool = gen.get_perfect_status()
+        self.draw_speed: float = 5 / (self.height * self.width)
 
         self.define_params()
 
@@ -68,7 +69,7 @@ class MazeDrawer():
                 except StopIteration:
                     self.frame = None
                     self.animating_dfs = False
-                    if self.imperfect:
+                    if not self.perfect:
                         self.coded = self.generator.maze
 
             elif self.animating_bfs and self.frame:
@@ -94,7 +95,7 @@ class MazeDrawer():
             if not self.select_command():
                 print("\033[2J\033[H", end="")
                 break
-            time.sleep(0.05)
+            time.sleep(self.draw_speed)
 
     def draw_commands(self) -> None:
         wall = self.draw_set["cell_w_wall"].strip()
@@ -326,7 +327,7 @@ class MazeDrawer():
                 self.edge_positions = []
             self.frame = self.generator.make_imperfect_frames()
             self.animating_imp = True
-            self.imperfect = True
+            self.perfect = False
 
         elif key == "f":
             if not self.solution:
@@ -339,7 +340,13 @@ class MazeDrawer():
                 self.edge_positions = []
 
         elif key == "w":
-            pass
+            self.generator.swap_algorithm()
+            self.generator.generate_maze()
+            if not self.perfect:
+                self.generator.make_imperfect()
+            self.coded = self.generator.maze
+            if self.solution:
+                self.solution = self.generator.find_shortest_path()
 
         elif key == "q":
             return False
