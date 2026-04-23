@@ -123,7 +123,7 @@ class MazeDrawer():
         print(" "*10, end="")
         print(f"{wall} Algorithm used: {self.generator._strategy.__class__.__name__}")
         print(" "*10, end="")
-        print(f"{wall} Perfect: {self.perfect}")
+        print(f"{wall} Perfect: {self.perfect} ")
         print(" "*10 + self.draw_set["bot_left_corner"])
 
     def draw_commands(self) -> None:
