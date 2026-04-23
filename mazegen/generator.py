@@ -94,7 +94,7 @@ class MazeGenerator:
                                                   self._seed)
 
     def make_imperfect_frames(self, probability: float = 0.05) \
-            -> Generator[list[list[int]], None, None]:
+            -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
         if not isinstance(probability, (int, float)):
             raise MazeGeneratorError("Expected probability to be of"
                                      " type float")
@@ -107,8 +107,9 @@ class MazeGenerator:
         return self._strategy.bfs(self.maze, self._width, self._height,
                                   self._entry, self._exit)
 
-    def rev_path_frames(self) -> Generator[tuple[tuple[int, int] | None,
-                                           list[tuple[int, int]]], None, None]:
+    def path_frames(self) -> Generator[tuple[list[tuple[int, int]],
+                                             list[tuple[int, int]]],
+                                       None, None]:
 
         return self._strategy.bfs_animate(self.maze, self._width, self._height,
                                           self._entry, self._exit)

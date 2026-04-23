@@ -64,7 +64,7 @@ class MazeAlgorithm(ABC):
     def make_imperfect_frames(self, maze: list[list[int]],
                               probability: float = 0.05,
                               seed: int | None = None) \
-            -> Generator[list[list[int]], None, None]:
+            -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
 
         width: int = len(maze[0])
         height: int = len(maze)
@@ -115,7 +115,7 @@ class MazeAlgorithm(ABC):
                             maze[y][x] |= (1 << self.S)
                             maze[y + 1][x] |= (1 << self.N)
 
-                yield maze
+                yield (x, y), maze
 
     def make_imperfect(self, maze: list[list[int]], probability: float = 0.05,
                        seed: int | None = None) -> list[list[int]]:
@@ -171,70 +171,53 @@ class MazeAlgorithm(ABC):
 
         return maze
 
+    def bfs_animate(self, maze: list[list[int]], width: int, height: int,
+                    entry: tuple[int, int], exit: tuple[int, int]) \
+            -> Generator[tuple[list[tuple[int, int]],
+                               list[tuple[int, int]]], None, None]:
+
+        queue: deque[tuple[int, int]] = deque([entry])
+        searched: list[tuple[int, int]] = []
+        visited: set[tuple[int, int]] = set([entry])
+        parent: dict[tuple[int, int], tuple[int, int] | None] = {entry: None}
+
+        while queue:
+            cell: tuple[int, int] = queue.popleft()
+            searched.append(cell)
+
+            if (cell == exit):
+                path: list[tuple[int, int]] = []
+                current: tuple[int, int] | None = exit
+                while current is not None:
+                    path.append(current)
+                    current = parent[current]
+                    yield searched, path[::-1]
+                return
+
+            for dx, dy, direction, opposite in self.DIRS:
+                nx: int = dx + cell[0]
+                ny: int = dy + cell[1]
+
+                if 0 <= nx < width and 0 <= ny < height:
+                    if (nx, ny) not in visited:
+                        if not (maze[cell[1]][cell[0]] & 1 << direction):
+                            visited.add((nx, ny))
+                            parent[(nx, ny)] = cell
+                            queue.append((nx, ny))
+
+            yield searched, []
+
+        yield searched, []
+
     def bfs(self, maze: list[list[int]], width: int, height: int,
             entry: tuple[int, int], exit: tuple[int, int]) \
             -> list[tuple[int, int]]:
 
-        queue: deque[tuple[int, int]] = deque([entry])
-        visited: set[tuple[int, int]] = set([entry])
-        parent: dict[tuple[int, int], tuple[int, int] | None] = {entry: None}
-
-        while queue:
-            cell: tuple[int, int] = queue.popleft()
-
-            if (cell == exit):
-                path: list[tuple[int, int]] = []
-                current: tuple[int, int] | None = exit
-                while current is not None:
-                    path.append(current)
-                    current = parent[current]
-                return path[::-1]
-
-            for dx, dy, direction, opposite in self.DIRS:
-                nx: int = dx + cell[0]
-                ny: int = dy + cell[1]
-
-                if 0 <= nx < width and 0 <= ny < height:
-                    if (nx, ny) not in visited:
-                        if not (maze[cell[1]][cell[0]] & 1 << direction):
-                            visited.add((nx, ny))
-                            parent[(nx, ny)] = cell
-                            queue.append((nx, ny))
-
-        return []
-
-    def bfs_animate(self, maze: list[list[int]], width: int, height: int,
-                    entry: tuple[int, int], exit: tuple[int, int]) \
-            -> Generator[tuple[tuple[int, int] | None,
-                               list[tuple[int, int]]], None, None]:
-
-        queue: deque[tuple[int, int]] = deque([entry])
-        visited: set[tuple[int, int]] = set([entry])
-        parent: dict[tuple[int, int], tuple[int, int] | None] = {entry: None}
-
-        while queue:
-            cell: tuple[int, int] = queue.popleft()
-
-            if (cell == exit):
-                path: list[tuple[int, int]] = []
-                current: tuple[int, int] | None = exit
-                while current is not None:
-                    path.append(current)
-                    current = parent[current]
-                    yield None, path
-                return None
-
-            for dx, dy, direction, opposite in self.DIRS:
-                nx: int = dx + cell[0]
-                ny: int = dy + cell[1]
-
-                if 0 <= nx < width and 0 <= ny < height:
-                    if (nx, ny) not in visited:
-                        if not (maze[cell[1]][cell[0]] & 1 << direction):
-                            visited.add((nx, ny))
-                            parent[(nx, ny)] = cell
-                            queue.append((nx, ny))
-                            yield cell, []
+        final_path: list[tuple[int, int]] = []
+        for searched, path in self.bfs_animate(maze, width, height,
+                                               entry, exit):
+            final_path = path
+        return final_path
 
 
 class DFSAlgorithm(MazeAlgorithm):
