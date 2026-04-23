@@ -19,7 +19,7 @@ class MazeDrawer():
 
     def __init__(self, gen: MazeGenerator,
                  style_param: int = 3,
-                 color_param: int = 0):
+                 color_param: int = 2):
         self.generator: MazeGenerator = gen
         self.coded: list[list[int]] = gen.maze
         self.path: list[tuple[int, int]] = []
@@ -87,13 +87,13 @@ class MazeDrawer():
                 (top*8 + top_s) + (top*20 + top_s)*2)
         print(line[:-1] + self.draw_set["up_right_corner"])
         print(" "*6, end="")
-        print(f"c. Change Color     {wall}  s. Change Style   {wall}  q. quit")
+        print(f"c.Change Color      {wall}  s.Change Style    {wall}  q.quit")
         print(" "*6, end="")
-        print(f"i. Toggle Imperfect {wall}  f. Toggle Solution{wall}"
-              "  p. Toggle Exit/Entry")
+        print(f"i.Toggle Imperfect  {wall}  f.Toggle Solution {wall}"
+              "  p.Toggle Exit/Entry")
         print(" "*6, end="")
-        print(f"j. Animate Imperfect{wall}  o. Animate BFS    {wall}"
-              "  g. Animate DFS/PRIM")
+        print(f"j.Animate Imperfect {wall}  o.Animate BFS     {wall}"
+              "  g.Animate DFS/PRIM")
         print(" "*5, end="")
         line = (self.draw_set["bot_left_corner"] +
                 ((self.draw_set["up_no_wall"] * (5) +
@@ -157,7 +157,7 @@ class MazeDrawer():
         bot_row = bot_row[:-1] + self.draw_set["bot_right_corner"]
 
         print(" "*10, end="")
-        mid_menu = (o_wall + " MENU " + o_wall + self.RESET + " " * 2)
+        mid_menu = (o_wall + self.BOLD + " MENU " + self.RESET + o_wall + self.RESET + " " * 2)
         print(mid_menu, end="")
         print(self.BOLD + self.colors["wall"] + bot_row + self.RESET, end="")
 
@@ -257,8 +257,8 @@ class MazeDrawer():
 
         elif key == "p":
             if not self.edge_positions:
-                self.edge_positions.append(self.generator._entry)
-                self.edge_positions.append(self.generator._exit)
+                self.edge_positions =\
+                    self.generator.get_entry_exit_positions()
             else:
                 self.edge_positions = []
                 self.solution = []
@@ -282,8 +282,8 @@ class MazeDrawer():
             if self.solution:
                 self.solution = []
             if not self.edge_positions:
-                self.edge_positions.append(self.generator._entry)
-                self.edge_positions.append(self.generator._exit)
+                self.edge_positions =\
+                    self.generator.get_entry_exit_positions()
             self.frame = self.generator.path_frames()
             self.animating_bfs = True
 
@@ -310,8 +310,8 @@ class MazeDrawer():
         elif key == "f":
             if not self.solution:
                 if not self.edge_positions:
-                    self.edge_positions.append(self.generator._entry)
-                    self.edge_positions.append(self.generator._exit)
+                    self.edge_positions =\
+                        self.generator.get_entry_exit_positions()
                 self.solution = self.generator.find_shortest_path()
             else:
                 self.solution = []
