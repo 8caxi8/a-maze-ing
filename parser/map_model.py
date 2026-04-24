@@ -50,7 +50,8 @@ class MapConfig(BaseModel):
 
     @field_validator("entry", "exit", mode="before")
     @classmethod
-    def parse_coordinates(cls, point: str | tuple[int, int]) -> tuple[int, int]:
+    def parse_coordinates(cls, point: str | tuple[int, int])\
+            -> tuple[int, int]:
         if isinstance(point, tuple):
             return point
 
