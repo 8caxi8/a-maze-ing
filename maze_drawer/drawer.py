@@ -8,6 +8,7 @@ from mazegen import MazeGenerator
 from typing import Generator, Any
 from .draw_sets import choose_drawing_set
 from .color_sets import choose_color_set
+from .open_screen import open_gen, exp, project_name
 
 
 class DrawerError(Exception):
@@ -27,15 +28,21 @@ class MazeDrawer():
                  style_param: int = 3,
                  color_param: int = 2):
         self.generator: MazeGenerator = gen
-        self.coded: list[list[int]] = gen.maze
         self.path: list[tuple[int, int]] = []
         self.solution: list[tuple[int, int]] = []
-        self.edge_positions: list[tuple[int, int]] =\
-            gen.get_entry_exit_positions()
-        self.height: int = len(self.coded)
-        self.width: int = len(self.coded[0])
+        self.edge_positions: list[tuple[int, int]] = []
+
+        self.MAX_COLORS = int(choose_color_set(-1)["size"])
+        self.MAX_STYLES = int(choose_drawing_set(-1)["size"])
         self.style_param: int = style_param
         self.color_param: int = color_param
+        self.define_params()
+        self.show_menu: int = 0
+        self._starting_screen()
+
+        self.coded: list[list[int]] = gen.maze
+        self.height: int = len(self.coded)
+        self.width: int = len(self.coded[0])
         self.animating_dfs: bool = False
         self.animating_bfs: bool = False
         self.animating_imp: bool = False
@@ -44,17 +51,12 @@ class MazeDrawer():
         self.draw_speed: float = max(0.001,
                                      min(0.5, 5 / (self.height * self.width)))
         self.show_configs: int = 0
-        self.show_menu: int = 1
+        self.show_menu = 1
         self.pause: str = ""
 
-        self.define_params()
+        self._check_terminal_size()
 
-        self.MAX_COLORS = int(choose_color_set(-1)["size"])
-        self.MAX_STYLES = int(choose_drawing_set(-1)["size"])
-
-        self.check_terminal_size()
-
-    def check_terminal_size(self) -> None:
+    def _check_terminal_size(self) -> None:
         MIN_COLS = 69
         cols, rows = shutil.get_terminal_size()
         rendered_maze_width = 20 + self.width * 4 + 1
@@ -65,11 +67,100 @@ class MazeDrawer():
         if render_cols > cols or render_rows > rows:
             raise DrawerError("Terminal size too smal to render the maze!")
 
+    def _starting_screen(self) -> None:
+        print("\033[2J\033[H", end="")
+
+        self.animate_42()
+        self.animate_path()
+
+    def animate_42(self) -> None:
+        self.coded = next(open_gen())
+        self.height = len(self.coded)
+        self.width = len(self.coded[0])
+        gen = open_gen()
+        e = exp()
+
+        for frame in gen:
+            speed_i = next(e)
+            self.coded = frame
+            print("\033[H", end="")
+
+            self.draw_map()
+            time.sleep(speed_i)
+            if self.color_param + 1 < self.MAX_COLORS:
+                self.color_param += 1
+            else:
+                self.color_param = 0
+            if self.style_param + 1 < self.MAX_STYLES:
+                self.style_param += 1
+            else:
+                self.style_param = 0
+            self.define_params()
+
+        for _ in range(self.MAX_STYLES):
+            if self.color_param + 1 < self.MAX_COLORS:
+                self.color_param += 1
+            else:
+                self.color_param = 0
+            if self.style_param + 1 < self.MAX_STYLES:
+                self.style_param += 1
+            else:
+                self.style_param = 0
+            self.define_params()
+            print("\033[H", end="")
+            self.draw_map()
+            time.sleep(0.02)
+
+    def animate_path(self) -> None:
+        self.edge_positions = [
+                    (4, 0),
+                    (4, 6),
+                ]
+        new_gen = MazeGenerator(9, 7, (4, 0), (4, 6))
+        new_gen.maze = self.coded
+        frame = new_gen.path_frames()
+        title = project_name(choose_color_set(2))
+        i = 0
+
+        while True:
+            print("\033[H", end="")
+
+            self.draw_map()
+
+            if self.solution:
+                if i > len(title):
+                    for line in title:
+                        print(line)
+                else:
+                    for j in range(i):
+                        print(title[j])
+                    i += 1
+            try:
+                self.path, self.solution = next(frame)
+            except StopIteration:
+                break
+            time.sleep(0.05)
+
+        self.path = []
+        print("\033[H", end="")
+        self.draw_map()
+        time.sleep(1)
+
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            while True:
+                tty.setcbreak(fd)
+                key = self.getch()
+                if key is not None:
+                    break
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            self.solution = []
+            self.path = []
+            self.edge_positions = self.generator.get_entry_exit_positions()
+
     def start_engine(self) -> None:
-        # print("Starting Engine ...")
-        # time.sleep(2)
-        # print("Loading assets...")
-        # time.sleep(0.5)
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
 
@@ -79,52 +170,16 @@ class MazeDrawer():
 
             while True:
                 print("\033[H", end="")
-                if self.animating_dfs and self.frame:
-                    try:
-                        self.coded, self.path = next(self.frame)
-                    except StopIteration:
-                        self.frame = None
-                        self.animating_dfs = False
-                        if not self.perfect:
-                            self.coded = self.generator.maze
 
-                elif self.animating_bfs and self.frame:
-                    try:
-                        self.path, self.solution = next(self.frame)
-                    except StopIteration:
-                        self.frame = None
-                        self.animating_bfs = False
-                        self.path = []
-
-                elif self.animating_imp and self.frame:
-                    try:
-                        cell, self.coded = next(self.frame)
-                        self.path = [cell]
-                    except StopIteration:
-                        self.frame = None
-                        self.animating_imp = False
-                        self.path = []
-                        self.generator.make_imperfect()
+                if self._is_animating():
+                    self._next_frame()
 
                 self.draw_map()
-                if self.show_menu == 1:
-                    self.draw_commands()
-                elif self.show_menu == 2:
-                    for _ in range(6):
-                        print(" "*70)
-                    self.show_menu = 0
-                    if self.show_configs == 1:
-                        for _ in range(7):
-                            print(" "*50)
-                        self.show_configs = 0
+
+                if self._show_menu():
                     continue
 
-                if self.show_configs == 1 and self.show_menu == 1:
-                    self.draw_configs()
-                elif self.show_configs == 2:
-                    for _ in range(7):
-                        print(" "*50)
-                    self.show_configs = 0
+                if self._show_configs():
                     continue
 
                 if not self.select_command():
@@ -134,17 +189,86 @@ class MazeDrawer():
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-    def draw_configs(self) -> None:
+    def _is_animating(self) -> bool:
+        return self.animating_bfs or self.animating_dfs or self.animating_imp
+
+    def _next_frame(self) -> None:
+        if self.animating_dfs and self.frame:
+            try:
+                self.coded, self.path = next(self.frame)
+
+            except StopIteration:
+                self.frame = None
+                self.animating_dfs = False
+                if not self.perfect:
+                    self.coded = self.generator.maze
+
+        elif self.animating_bfs and self.frame:
+            try:
+                self.path, self.solution = next(self.frame)
+
+            except StopIteration:
+                self.frame = None
+                self.animating_bfs = False
+                self.path = []
+
+        elif self.animating_imp and self.frame:
+            try:
+                cell, self.coded = next(self.frame)
+                self.path = [cell]
+
+            except StopIteration:
+                self.frame = None
+                self.animating_imp = False
+                self.path = []
+                self.generator.make_imperfect()
+
+    def _show_menu(self) -> bool:
+        if self.show_menu == 1:
+            self.draw_commands()
+
+        elif self.show_menu == 2:
+            for _ in range(6):
+                print(" "*70)
+            self.show_menu = 0
+            if self.show_configs == 1:
+                for _ in range(7):
+                    print(" "*50)
+                self.show_configs = 0
+            return True
+
+        return False
+
+    def _show_configs(self) -> bool:
+        if self.show_configs == 1 and self.show_menu == 1:
+            self._draw_configs()
+
+        elif self.show_configs == 2:
+            for _ in range(7):
+                print(" "*50)
+            self.show_configs = 0
+            return True
+
+        return False
+
+    def _draw_configs(self) -> None:
         wall = self.draw_set["cell_left_wall"]
         sp = " "*10
+
         print(f"{sp}{wall} Maze Dimensions: ({self.width}, {self.height})")
+
         positions = self.generator.get_entry_exit_positions()
         print(f"{sp}{wall} Entry Point: {positions[0]}")
+
         print(f"{sp}{wall} Exit Point: {positions[1]}")
+
         print(f"{sp}{wall} SEED: {self.generator._seed}")
+
         print(f"{sp}{wall} Algorithm used: "
               f"{self.generator._strategy.__class__.__name__}")
+
         print(f"{sp}{wall} Perfect: {self.perfect} ")
+
         print(sp + self.draw_set["bot_left_w_s_corner"])
 
     def draw_commands(self) -> None:
@@ -375,9 +499,6 @@ class MazeDrawer():
     def define_params(self) -> None:
         self.draw_set = choose_drawing_set(self.style_param)
         self.colors = choose_color_set(self.color_param)
-
-    def _is_animating(self) -> bool:
-        return self.animating_bfs or self.animating_dfs or self.animating_imp
 
     def _stop_animation(self) -> bool:
         self.frame = None
