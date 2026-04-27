@@ -1,15 +1,16 @@
 MAIN = a_maze_ing.py
 FILE = config.txt
+PY = python3
 
 install:
 	@which uv > /dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
 	@export PATH="$$HOME/.local/bin:$$PATH" && uv sync
 
 run:
-	uv run python3 $(MAIN) $(FILE)
+	uv run $(PY) $(MAIN) $(FILE)
 
 debug:
-	uv run python3 -m pdb $(MAIN) $(FILE)
+	uv run $(PY) -m pdb $(MAIN) $(FILE)
 
 clean:
 	find . -name "__pycache__" -print -exec rm -rf {} +
@@ -24,4 +25,7 @@ lint-strict:
 	uv run flake8 --exclude=.venv,llm_sdk .
 	uv run mypy . --exclude '\.venv|llm_sdk' --strict
 
-.PHONY: install run debug clean lint lint-strict
+build:
+	$(PY) -m build
+
+.PHONY: install run debug clean lint lint-strict build

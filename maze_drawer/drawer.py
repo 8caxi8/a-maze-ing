@@ -434,7 +434,7 @@ class MazeDrawer():
                 self.frame = None
                 self.animating_imp = False
                 self.path = []
-                self.generator.make_imperfect()
+                # self.generator.make_imperfect()
 
     def _show_menu(self) -> bool:
         """
@@ -507,10 +507,10 @@ class MazeDrawer():
 
         print(f"{sp}{wall} Exit Point: {positions[1]}")
 
-        print(f"{sp}{wall} SEED: {self.generator._seed}")
+        print(f"{sp}{wall} SEED: {self.generator.get_maze_seed()}")
 
         print(f"{sp}{wall} Algorithm used: "
-              f"{self.generator._strategy.__class__.__name__}")
+              f"{self.generator.get_strategy()}")
 
         print(f"{sp}{wall} Perfect: {self.perfect} ")
 
