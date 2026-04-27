@@ -1,4 +1,39 @@
 def choose_drawing_set(param: int) -> dict[str, str]:
+    """
+    Return a predefined maze drawing character set.
+
+    This function provides different visual styles for rendering
+    the maze in the terminal. Each drawing set contains the
+    characters used for corners, walls, paths, closed cells,
+    and borders.
+
+    Available styles include:
+
+    - 0: Basic ASCII style
+    - 1: Light box drawing style
+    - 2: Double-line box drawing style
+    - 3: Heavy box drawing style (default)
+    - 4: Rounded light box style
+    - 5: Rounded heavy box style
+
+    Special behavior:
+        If ``param == -1``, the function returns a dictionary
+        containing the total number of available drawing sets:
+
+        ``{"size": "<number_of_sets>"}``
+
+    Args:
+        param (int):
+            The drawing set identifier.
+
+    Returns:
+        dict[str, str]:
+            A dictionary containing all characters required
+            to render the maze using the selected style.
+
+            If the provided value does not exist, the default
+            drawing set (style 3) is returned.
+    """
     DRAWING_SETS = {
         0: {
             "up_left_n_w_corner": "+",
@@ -465,7 +500,19 @@ def choose_drawing_set(param: int) -> dict[str, str]:
     }
 
     def return_size() -> dict[str, str]:
-        nonlocal DRAWING_SETS
+        """
+        Return the total number of available drawing sets.
+
+        Uses the enclosing ``DRAWING_SETS`` dictionary to calculate
+        how many styles are currently supported.
+
+        Returns:
+            dict[str, str]:
+                Dictionary containing the number of drawing sets
+                in the format:
+
+                ``{"size": "<count>"}``
+        """
         return {"size": str(len(DRAWING_SETS.keys()))}
 
     if param == -1:

@@ -4,6 +4,21 @@ import math
 
 
 def open_gen() -> Generator[list[list[int]], None, None]:
+    """
+    Generate progressive animation frames for the project logo.
+
+    Starts with an empty 7x9 logo structure and gradually reveals
+    the cells that form the final logo by randomly selecting valid
+    positions from the predefined ``LOGO`` template.
+
+    Each yielded frame is regenerated so surrounding wall/path
+    connections are updated correctly.
+
+    Yields:
+        list[list[int]]:
+            A 2D matrix representing the current logo frame,
+            where each integer encodes wall/path directions.
+    """
     LOGO: list[list[int]] = [
         [0,  4,  0,  0,  0,  4,  4,  4,  0],
         [2, 15,  8,  0,  2, 15, 15, 15,  8],
@@ -27,6 +42,20 @@ def open_gen() -> Generator[list[list[int]], None, None]:
 
 
 def get_positions(logo: list[list[int]]) -> list[tuple[int, int]]:
+    """
+    Extract all positions marked as active cells (value 15).
+
+    Scans a 2D logo matrix and returns the coordinates of every
+    cell whose value is ``15``.
+
+    Args:
+        logo (list[list[int]]):
+            A 2D matrix representing the logo structure.
+
+    Returns:
+        list[tuple[int, int]]:
+            A list of ``(x, y)`` coordinates where the cell value is 15.
+    """
     height: int = len(logo)
     width: int = len(logo[0])
     positions: list[tuple[int, int]] = []
@@ -40,6 +69,26 @@ def get_positions(logo: list[list[int]]) -> list[tuple[int, int]]:
 
 
 def regenerate_logo(logo_structure: list[list[int]]) -> list[list[int]]:
+    """
+    Recalculate wall/path connections for the current logo frame.
+
+    Resets all non-active cells and rebuilds directional wall values
+    around cells marked as ``15``. Bitwise flags are used to represent
+    directional connections:
+
+    - North
+    - East
+    - South
+    - West
+
+    Args:
+        logo_structure (list[list[int]]):
+            Current 2D logo matrix.
+
+    Returns:
+        list[list[int]]:
+            Updated logo matrix with regenerated directional values.
+    """
     N, E, S, W = 0, 1, 2, 3
     height: int = len(logo_structure)
     width: int = len(logo_structure[0])
@@ -70,6 +119,21 @@ def regenerate_logo(logo_structure: list[list[int]]) -> list[list[int]]:
 
 
 def exp() -> Generator[float, None, None]:
+    """
+    Generate exponentially decreasing values.
+
+    Starts from ``x = 0.1`` and continuously yields:
+
+    ``1 / exp(x)``
+
+    while increasing ``x`` by ``0.2`` each iteration.
+
+    Useful for smooth animation timing or delay scaling.
+
+    Yields:
+        float:
+            The next exponential decay value.
+    """
     x: float = 0.1
     while True:
         yield 1 / math.exp(x)
@@ -78,6 +142,29 @@ def exp() -> Generator[float, None, None]:
 
 def project_name(color_set: dict[str, str])\
         -> list[str]:
+    """
+    Build the colored ASCII-art project title.
+
+    Uses ANSI color escape codes provided in ``color_set`` to
+    render the stylized project name with terminal colors.
+
+    Expected color keys include:
+
+    - ``last_pos``
+    - ``closed``
+    - ``wall``
+    - ``path``
+
+    Missing keys default to empty strings.
+
+    Args:
+        color_set (dict[str, str]):
+            Dictionary containing ANSI color codes.
+
+    Returns:
+        list[str]:
+            A list of strings representing the colored ASCII-art title.
+    """
     c1 = color_set.get("last_pos", "")
     c2 = color_set.get("closed", "")
     c3 = color_set.get("wall", "")

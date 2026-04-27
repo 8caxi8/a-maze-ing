@@ -1,5 +1,67 @@
 def choose_color_set(param: int) -> dict[str, str]:
+    """
+    Return a predefined ANSI color configuration for maze rendering.
+
+    This function provides multiple color themes used for displaying
+    the maze, project title, and path visualization inside the terminal.
+
+    Each color set includes ANSI RGB escape codes for:
+
+    - wall
+    - closed
+    - path
+    - last_pos
+    - entry_pos
+    - exit_pos
+
+    Available styles include:
+
+    - 0: Default warm theme
+    - 1: Blue/green theme
+    - 2: Orange/blue contrast theme
+    - 3: Cyan/purple theme
+    - 4: Minimal grayscale theme
+    - 5: Strong pink/gold theme
+
+    Special behavior:
+        If ``param == -1``, the function returns a dictionary
+        containing the total number of available color sets:
+
+        ``{"size": "<number_of_sets>"}``
+
+    Args:
+        param (int):
+            The color set identifier.
+
+    Returns:
+        dict[str, str]:
+            A dictionary containing ANSI escape sequences for
+            terminal coloring.
+
+            If the provided value does not exist, the default
+            color set (style 0) is returned.
+    """
     def rgb(r: int, g: int, b: int) -> str:
+        """
+        Generate an ANSI RGB foreground color escape sequence.
+
+        Uses 24-bit terminal color formatting to create
+        custom RGB text colors.
+
+        Args:
+            r (int):
+                Red channel value (0–255).
+
+            g (int):
+                Green channel value (0–255).
+
+            b (int):
+                Blue channel value (0–255).
+
+        Returns:
+            str:
+                ANSI escape sequence for the given RGB color.
+        """
         return f"\033[38;2;{r};{g};{b}m"
 
     COLOR_SETS = {
@@ -54,7 +116,19 @@ def choose_color_set(param: int) -> dict[str, str]:
     }
 
     def return_size() -> dict[str, str]:
-        nonlocal COLOR_SETS
+        """
+        Return the total number of available color sets.
+
+        Uses the enclosing ``COLOR_SETS`` dictionary to calculate
+        how many themes are currently supported.
+
+        Returns:
+            dict[str, str]:
+                Dictionary containing the number of color sets
+                in the format:
+
+                ``{"size": "<count>"}``
+        """
         return {"size": str(len(COLOR_SETS.keys()))}
 
     if param == -1:

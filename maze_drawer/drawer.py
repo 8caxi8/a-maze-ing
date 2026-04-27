@@ -16,6 +16,13 @@ class DrawerError(Exception):
 
 
 class MazeDrawer():
+    """
+    Handles terminal-based maze rendering, animations, and user interaction.
+
+    This class is responsible for displaying the maze, animating generation
+    and solving algorithms, managing styles and colors, and handling
+    keyboard controls during runtime.
+    """
     BOLD = "\033[1;97m"
     RESET = "\033[0m"
 
@@ -26,8 +33,63 @@ class MazeDrawer():
 
     def __init__(self, gen: MazeGenerator,
                  style_param: int = 3,
-                 color_param: int = 2):
+                 color_param: int = 2,
+                 start_logo: bool = True):
+        """
+        Initialize the maze drawer and prepare the rendering engine.
+
+        Performs terminal size validation, initializes rendering parameters,
+        optionally displays the animated startup screen, and prepares
+        animation-related state.
+
+        Args:
+            gen:
+                The maze generator instance containing the maze data.
+
+            style_param:
+                Initial drawing style identifier.
+
+            color_param:
+                Initial color theme identifier.
+
+            start_logo:
+                Whether to display the animated startup screen before
+                entering the main interface.
+
+        Raises:
+            DrawerError:
+                If the terminal is too small to render the maze.
+        """
+        self._check_terminal_size(gen)
+        self._initbasicparams(gen, style_param, color_param)
+
+        if start_logo:
+            self._starting_screen(style_param, color_param)
+
+        self._initanimparams(gen)
+
+    def _initbasicparams(self, gen: MazeGenerator,
+                         style_param: int,
+                         color_param: int) -> None:
+        """
+        Initialize base rendering configuration and display settings.
+
+        Sets the maze generator reference, prepares path tracking,
+        loads available styles and color themes, and initializes
+        menu visibility state.
+
+        Args:
+            gen:
+                Maze generator instance.
+
+            style_param:
+                Initial drawing style selection.
+
+            color_param:
+                Initial color theme selection.
+        """
         self.generator: MazeGenerator = gen
+
         self.path: list[tuple[int, int]] = []
         self.solution: list[tuple[int, int]] = []
         self.edge_positions: list[tuple[int, int]] = []
@@ -37,81 +99,196 @@ class MazeDrawer():
         self.style_param: int = style_param
         self.color_param: int = color_param
         self.define_params()
-        self.show_menu: int = 0
-        self._starting_screen()
 
+        self.show_menu: int = 0
+
+    def _initanimparams(self, gen: MazeGenerator) -> None:
+        """
+        Initialize animation state variables and maze rendering data.
+
+        Stores the maze structure, dimensions, animation flags,
+        animation speed, and runtime interface state.
+
+        Args:
+            gen:
+                Maze generator containing the current maze.
+        """
         self.coded: list[list[int]] = gen.maze
+        self.perfect: bool = gen.get_perfect_status()
         self.height: int = len(self.coded)
         self.width: int = len(self.coded[0])
+
         self.animating_dfs: bool = False
         self.animating_bfs: bool = False
         self.animating_imp: bool = False
+
         self.frame: Generator[Any, None, None] | None = None
-        self.perfect: bool = gen.get_perfect_status()
         self.draw_speed: float = max(0.001,
                                      min(0.5, 5 / (self.height * self.width)))
+
         self.show_configs: int = 0
         self.show_menu = 1
         self.pause: str = ""
 
-        self._check_terminal_size()
+    def _check_terminal_size(self, gen: MazeGenerator) -> None:
+        """
+        Validate that the terminal is large enough to render the maze.
 
-    def _check_terminal_size(self) -> None:
-        MIN_COLS = 69
+        Calculates the required number of terminal rows and columns
+        based on maze dimensions and raises an exception if the
+        current terminal size is insufficient.
+
+        Args:
+            gen:
+                Maze generator containing the maze dimensions.
+
+        Raises:
+            DrawerError:
+                If the terminal size is too small.
+        """
+        MIN_COLS = 72
+        MIN_ROWS = 20
         cols, rows = shutil.get_terminal_size()
-        rendered_maze_width = 20 + self.width * 4 + 1
-        render_cols = MIN_COLS if MIN_COLS > rendered_maze_width\
+        height, width = len(gen.maze), len(gen.maze[0])
+
+        rendered_maze_width = 20 + width * 4 + 5
+        rendered_width = MIN_COLS if MIN_COLS > rendered_maze_width\
             else rendered_maze_width
-        render_rows = 2 + self.height * 2 + 6
+        rendered_height = height * 2 + 1 + MIN_ROWS
 
-        if render_cols > cols or render_rows > rows:
-            raise DrawerError("Terminal size too smal to render the maze!")
+        if rendered_width > cols or rendered_height > rows:
+            raise DrawerError(f"Terminal size {cols, rows}too small to render"
+                              " the maze! Need at least: "
+                              f"{rendered_width, rendered_height}!")
 
-    def _starting_screen(self) -> None:
+    def _starting_screen(self, style_param: int, color_param: int) -> None:
         print("\033[2J\033[H", end="")
+        """
+        Display the animated startup screen.
 
-        self.animate_42()
-        self.animate_path()
+        Plays the opening logo animation and path animation before
+        entering the main maze interface.
 
-    def animate_42(self) -> None:
-        self.coded = next(open_gen())
-        self.height = len(self.coded)
-        self.width = len(self.coded[0])
+        Terminal settings are temporarily changed to allow
+        non-blocking keyboard interruption.
+
+        Args:
+            style_param:
+                Drawing style to restore after animation.
+
+            color_param:
+                Color theme to restore after animation.
+        """
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+
+        try:
+            tty.setcbreak(fd)
+            self._animate_42(fd)
+            self._animate_path(fd)
+
+        except DrawerError:
+            pass
+
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            self.solution = []
+            self.path = []
+            self.edge_positions = self.generator.get_entry_exit_positions()
+
+            self.style_param = style_param
+            self.color_param = color_param
+            self.define_params()
+
+    def _check_skip(self, fd: int) -> None:
+        """
+        Interrupt the startup animation if the user presses a key.
+
+        Args:
+            fd:
+                File descriptor for terminal input.
+
+        Raises:
+            DrawerError:
+                Raised when input is detected to stop animation.
+        """
+        if self.getch_nonblocking() is not None:
+            raise DrawerError
+
+    def _cycle_style(self) -> None:
+        """
+        Cycle through available drawing styles and color themes.
+
+        Used during the startup animation to create visual transitions.
+        Automatically wraps when reaching the last available style
+        or color set.
+        """
+        if self.color_param + 1 < self.MAX_COLORS:
+            self.color_param += 1
+        else:
+            self.color_param = 0
+        if self.style_param + 1 < self.MAX_STYLES:
+            self.style_param += 1
+        else:
+            self.style_param = 0
+        self.define_params()
+
+    def _animate_42(self, fd: int) -> None:
+        """
+        Animate the opening logo frame sequence.
+
+        Gradually reveals the project logo using generated frames
+        while cycling through available styles and colors.
+
+        Args:
+            fd:
+                File descriptor for terminal input.
+
+        Raises:
+            DrawerError:
+                If the user interrupts the animation.
+        """
         gen = open_gen()
         e = exp()
 
-        for frame in gen:
-            speed_i = next(e)
-            self.coded = frame
-            print("\033[H", end="")
+        self.coded = next(open_gen())
+        self.height = len(self.coded)
+        self.width = len(self.coded[0])
 
+        for frame in gen:
+            self.coded = frame
+            self._cycle_style()
+
+            print("\033[H", end="")
             self.draw_map()
-            time.sleep(speed_i)
-            if self.color_param + 1 < self.MAX_COLORS:
-                self.color_param += 1
-            else:
-                self.color_param = 0
-            if self.style_param + 1 < self.MAX_STYLES:
-                self.style_param += 1
-            else:
-                self.style_param = 0
-            self.define_params()
+
+            time.sleep(next(e))
+            self._check_skip(fd)
 
         for _ in range(self.MAX_STYLES):
-            if self.color_param + 1 < self.MAX_COLORS:
-                self.color_param += 1
-            else:
-                self.color_param = 0
-            if self.style_param + 1 < self.MAX_STYLES:
-                self.style_param += 1
-            else:
-                self.style_param = 0
-            self.define_params()
+            self._cycle_style()
+
             print("\033[H", end="")
             self.draw_map()
+
+            self._check_skip(fd)
             time.sleep(0.02)
 
-    def animate_path(self) -> None:
+    def _animate_path(self, fd: int) -> None:
+        """
+        Animate the path traversal over the opening logo.
+
+        Simulates pathfinding across the startup logo and gradually
+        reveals the project title before waiting for user input.
+
+        Args:
+            fd:
+                File descriptor for terminal input.
+
+        Raises:
+            DrawerError:
+                If the user interrupts the animation.
+        """
         self.edge_positions = [
                     (4, 0),
                     (4, 6),
@@ -139,28 +316,45 @@ class MazeDrawer():
                 self.path, self.solution = next(frame)
             except StopIteration:
                 break
+            self._check_skip(fd)
             time.sleep(0.05)
 
         self.path = []
         print("\033[H", end="")
         self.draw_map()
         time.sleep(1)
+        self._check_skip(fd)
 
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            while True:
-                tty.setcbreak(fd)
-                key = self.getch()
-                if key is not None:
-                    break
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            self.solution = []
-            self.path = []
-            self.edge_positions = self.generator.get_entry_exit_positions()
+        print("\n"*6)
+        print(" "*10, end="")
+        print("Press any Key to start ", end="", flush=True)
+
+        i = 0
+        while True:
+            key = self.getch_nonblocking()
+            if key is not None:
+                break
+
+            if i < 3:
+                print(". ", end="", flush=True)
+                i += 1
+            else:
+                print(f"\r{' ' * 40}"
+                      f"\r{' ' * 10}Press any key to start ", end="",
+                      flush=True)
+                i = 0
+            time.sleep(0.5)
 
     def start_engine(self) -> None:
+        """
+        Start the main interactive rendering loop.
+
+        Continuously redraws the maze, updates active animations,
+        renders menus and configuration panels, and processes
+        keyboard input until the user exits.
+        """
+        RENDER_SPEED: float = 0.05
+        speed: float = 0.0
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
 
@@ -173,6 +367,9 @@ class MazeDrawer():
 
                 if self._is_animating():
                     self._next_frame()
+                    speed = self.draw_speed
+                else:
+                    speed = RENDER_SPEED
 
                 self.draw_map()
 
@@ -185,14 +382,30 @@ class MazeDrawer():
                 if not self.select_command():
                     break
 
-                time.sleep(self.draw_speed)
+                time.sleep(speed)
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     def _is_animating(self) -> bool:
+        """
+        Check whether any animation is currently active.
+
+        Returns:
+            bool:
+                True if DFS, BFS, or imperfect animation is active,
+                otherwise False.
+        """
         return self.animating_bfs or self.animating_dfs or self.animating_imp
 
     def _next_frame(self) -> None:
+        """
+        Advance the currently active animation by one frame.
+
+        Updates the maze state depending on which animation is active:
+        maze generation, shortest-path solving, or imperfect maze creation.
+
+        Stops animation automatically when the frame generator finishes.
+        """
         if self.animating_dfs and self.frame:
             try:
                 self.coded, self.path = next(self.frame)
@@ -224,15 +437,29 @@ class MazeDrawer():
                 self.generator.make_imperfect()
 
     def _show_menu(self) -> bool:
+        """
+        Handle menu visibility and rendering state.
+
+        Displays the command menu, hides it, or clears the menu area
+        depending on the current menu state.
+
+        Returns:
+            bool:
+                True if the screen was cleared and requires skipping
+                the current loop iteration, otherwise False.
+        """
+        if self.show_menu == 0:
+            self._draw_just_title()
+
         if self.show_menu == 1:
             self.draw_commands()
 
         elif self.show_menu == 2:
-            for _ in range(6):
+            for _ in range(8):
                 print(" "*70)
             self.show_menu = 0
             if self.show_configs == 1:
-                for _ in range(7):
+                for _ in range(8):
                     print(" "*50)
                 self.show_configs = 0
             return True
@@ -240,11 +467,22 @@ class MazeDrawer():
         return False
 
     def _show_configs(self) -> bool:
+        """
+        Handle configuration panel visibility and rendering state.
+
+        Displays the maze configuration panel, hides it, or clears
+        the configuration area depending on the current state.
+
+        Returns:
+            bool:
+                True if the screen was cleared and requires skipping
+                the current loop iteration, otherwise False.
+        """
         if self.show_configs == 1 and self.show_menu == 1:
             self._draw_configs()
 
         elif self.show_configs == 2:
-            for _ in range(7):
+            for _ in range(8):
                 print(" "*50)
             self.show_configs = 0
             return True
@@ -252,9 +490,16 @@ class MazeDrawer():
         return False
 
     def _draw_configs(self) -> None:
-        wall = self.draw_set["cell_left_wall"]
-        sp = " "*10
+        """
+        Render the maze configuration details.
 
+        Displays maze size, entry and exit positions, random seed,
+        generation algorithm, and whether the maze is perfect.
+        """
+        wall = self.draw_set["cell_left_wall"]
+        sp = " "*6
+
+        print(f"{sp}{self.draw_set['up_left_n_w_corner']}")
         print(f"{sp}{wall} Maze Dimensions: ({self.width}, {self.height})")
 
         positions = self.generator.get_entry_exit_positions()
@@ -271,19 +516,47 @@ class MazeDrawer():
 
         print(sp + self.draw_set["bot_left_w_s_corner"])
 
+    def _draw_just_title(self) -> None:
+        """
+        Render only the decorative title container.
+
+        Draws the title frame without displaying the command menu.
+        """
+        print(" "*5, end="")
+        line = (self.draw_set["bot_left_w_s_corner"] +
+                ((self.draw_set["up_n_ne_wall"] * (5) +
+                  self.draw_set["up_n_ne_wall"][-1]) * 2) +
+                self.draw_set["up_n_ne_wall"][:2] +
+                self.draw_set["up_n_e_ne_wall"][-1] +
+                self.draw_set["up_n_ne_wall"][:2] * 5 +
+                self.draw_set["up_n_e_ne_wall"][-1] +
+                self.draw_set["up_n_ne_wall"][:2] * 3 +
+                self.draw_set["bot_right_e_s_corner"])
+        print(line)
+
+        self._print_title()
+
     def draw_commands(self) -> None:
+        """
+        Render the command help menu.
+
+        Displays all available keyboard shortcuts and command
+        descriptions used during runtime interaction.
+        """
         wall = self.draw_set["cell_w_wall"].strip()
         top = self.draw_set["up_n_wall"][0]
         top_n = self.draw_set["bot_s_e_es_wall"][-1]
         top_s = self.draw_set["up_n_e_ne_wall"][-1]
         s = " "*6
+
         print(" "*5, end="")
         line = (self.draw_set["up_left_n_w_corner"] +
                 (top*4 + top_n + top*6 + top_n) +
                 (top*8 + top_s) + (top*20 + top_s)*2)
         print(line[:-1] + self.draw_set["up_right_n_e_corner"])
+
         print(f"{s}c.Change Color      {wall}  s.Change Style    {wall}"
-              "  q.quit")
+              "  q.quit" + " "*6)
         print(f"{s}i.Toggle Imperfect  {wall}  f.Toggle Solution {wall}"
               "  p.Toggle Exit/Entry")
         print(f"{s}j.Animate Imperfect {wall}  o.Animate BFS     {wall}"
@@ -291,19 +564,57 @@ class MazeDrawer():
         print(f"{s}w.Swap Algorithm    {wall}  y.Show Configs    {wall}"
               "  z.Stop Animation")
         print(" "*5, end="")
+
         line = (self.draw_set["bot_left_w_s_corner"] +
                 ((self.draw_set["up_n_ne_wall"] * (5) +
-                  self.draw_set["bot_s_e_es_wall"][-1]) * 3)[:-1] +
+                  self.draw_set["bot_s_e_es_wall"][-1]) * 2) +
+                self.draw_set["up_n_ne_wall"][:2] +
+                self.draw_set["up_n_e_ne_wall"][-1] +
+                self.draw_set["up_n_ne_wall"][:2] * 5 +
+                self.draw_set["up_n_e_ne_wall"][-1] +
+                self.draw_set["up_n_ne_wall"][:2] * 3 +
+                self.draw_set["bot_right_e_s_corner"])
+        print(line)
+
+        self._print_title()
+
+    def _print_title(self) -> None:
+        """
+        Print the project title banner.
+
+        Displays the styled “A-Maze-Ing” title using the current
+        wall color theme and active drawing set.
+        """
+        wall = self.draw_set["cell_w_wall"].strip()
+
+        title = (" "*50 + wall + self.BOLD + self.colors["wall"]
+                 + "A-Maze-Ing" + self.RESET + wall)
+        print(title)
+
+        line = (" "*50 + self.draw_set["bot_left_w_s_corner"] +
+                self.draw_set["up_n_ne_wall"][:2] * (5) +
                 self.draw_set["bot_right_e_s_corner"])
         print(line)
 
     def draw_map(self) -> None:
+        """
+        Render the complete maze.
+
+        Draws the top border, middle rows, final row, and bottom
+        border of the maze.
+        """
         self.print_top_container()
         self.print_mid_cells()
         self.print_last_cells()
         print()
 
     def print_top_container(self) -> None:
+        """
+        Render the top border of the maze.
+
+        Dynamically determines which wall and corner characters
+        should be displayed based on the maze structure.
+        """
         n = bool(self.coded[0][0] & (1 << self.N))
         w = bool(self.coded[0][0] & (1 << self.W))
         if not n and not w:
@@ -337,6 +648,12 @@ class MazeDrawer():
         print(self.BOLD + self.colors["wall"] + top_row + self.RESET)
 
     def print_mid_cells(self) -> None:
+        """
+        Render all middle maze rows.
+
+        Prints each cell row together with its separator row
+        until reaching the final maze row.
+        """
         for y in range(self.height - 1):
             w = bool(self.coded[y][0] & (1 << self.W))
             cells = self.draw_set["cell_left_wall"] if w \
@@ -351,6 +668,20 @@ class MazeDrawer():
                   self.RESET)
 
     def render_mid_row(self, y: int) -> str:
+        """
+        Generate the separator row between two maze rows.
+
+        Builds the connecting walls between row ``y`` and row
+        ``y + 1`` using the current drawing set.
+
+        Args:
+            y:
+                Index of the upper row.
+
+        Returns:
+            str:
+                The rendered separator row.
+        """
         w = bool(self.coded[y][0] & (1 << self.W))
         sw = bool(self.coded[y + 1][0] & (1 << self.W))
         s = bool(self.coded[y][0] & (1 << self.S))
@@ -386,6 +717,12 @@ class MazeDrawer():
         return mid_row
 
     def print_last_cells(self) -> None:
+        """
+        Render the final maze row and bottom border.
+
+        Also displays the lower menu section when the command
+        menu is enabled.
+        """
         o_wall = self.draw_set["cell_left_wall"]
 
         w = bool(self.coded[self.height - 1][0] & (1 << self.W))
@@ -445,6 +782,30 @@ class MazeDrawer():
 
     def render_cell(self, x: int, y: int,
                     is_last_col: bool, is_last_row: bool = False) -> str:
+        """
+        Render a single maze cell.
+
+        Applies different visual styles depending on whether the cell
+        is part of the path, solution, entry/exit points, animation
+        state, or a fully closed cell.
+
+        Args:
+            x:
+                Cell horizontal position.
+
+            y:
+                Cell vertical position.
+
+            is_last_col:
+                Whether the cell is in the last column.
+
+            is_last_row:
+                Whether the cell is in the final row.
+
+        Returns:
+            str:
+                The fully rendered terminal string for the cell.
+        """
         cell = self.coded[y][x]
         has_east = bool(cell & (1 << self.E))
         wall_char = self.draw_set["cell_w_wall"].strip() if has_east else " "
@@ -468,8 +829,8 @@ class MazeDrawer():
             is_last = (x, y) == self.path[-1]
             color = self.colors["last_pos"] if is_last else self.colors["path"]
             content = self.draw_set["cell_closed"]
-            border = self.draw_set["cell_left_wall"] if is_last_col\
-                else wall_char
+            border = self.draw_set["cell_left_wall"] if has_east\
+                else " "
 
         elif self.is_closed(x, y):
             color = self.colors["closed"]
@@ -493,14 +854,51 @@ class MazeDrawer():
                 self.RESET + self.BOLD + self.colors["wall"] + border)
 
     def is_closed(self, x: int, y: int) -> bool:
+        """
+        Check whether a cell is fully enclosed.
+
+        A cell is considered closed when all four directional
+        walls are present.
+
+        Args:
+            x:
+                Cell horizontal position.
+
+            y:
+                Cell vertical position.
+
+        Returns:
+            bool:
+                True if the cell is fully closed, otherwise False.
+        """
         cell = self.coded[y][x]
         return all(cell & (1 << d) for d in [self.N, self.E, self.W, self.S])
 
     def define_params(self) -> None:
+        """
+        Load the currently selected drawing style and color theme.
+
+        Updates internal references to the active drawing set
+        and ANSI color configuration.
+        """
         self.draw_set = choose_drawing_set(self.style_param)
         self.colors = choose_color_set(self.color_param)
 
     def _stop_animation(self) -> bool:
+        """
+        Stop all active animations and restore the maze state.
+
+        Clears animation generators, disables animation flags,
+        resets temporary path rendering, and restores the maze
+        to its normal state.
+
+        If the maze is currently imperfect, the imperfect layout
+        is restored after stopping the animation.
+
+        Returns:
+            bool:
+                Always returns True to continue program execution.
+        """
         self.frame = None
         self.animating_dfs = False
         self.animating_imp = False
@@ -514,6 +912,22 @@ class MazeDrawer():
         return True
 
     def handle_key(self, key: str) -> bool:
+        """
+        Process a keyboard command.
+
+        Applies actions such as changing colors or styles,
+        toggling solutions, switching algorithms, starting
+        animations, showing configuration panels, and quitting.
+
+        Args:
+            key:
+                The pressed keyboard key.
+
+        Returns:
+            bool:
+                False only when the quit command is triggered,
+                otherwise True.
+        """
         if key == "c":
             if self.color_param + 1 < self.MAX_COLORS:
                 self.color_param += 1
@@ -618,6 +1032,18 @@ class MazeDrawer():
         return True
 
     def select_command(self) -> bool:
+        """
+        Read and process user input.
+
+        Handles different input behavior depending on whether
+        an animation is currently running. Supports pausing,
+        stopping animations, and standard runtime commands.
+
+        Returns:
+            bool:
+                False when the program should terminate,
+                otherwise True.
+        """
         if self._is_animating():
             key = self.getch_nonblocking()
 
@@ -640,23 +1066,34 @@ class MazeDrawer():
             return True
 
         key = self.getch()
-        if key is not None:
-            return self.handle_key(key)
-        return True
-
-    def start_logo(self) -> None:
-        while True:
-            self._draw_start_logo()
-
-    def _draw_start_logo(self) -> None:
-        pass
+        return self.handle_key(key)
 
     @staticmethod
-    def getch() -> str | None:
+    def getch() -> str:
+        """
+        Read a single character from standard input.
+
+        This is a blocking input operation and waits until
+        the user presses a key.
+
+        Returns:
+            str:
+                The pressed key.
+        """
         return sys.stdin.read(1)
 
     @staticmethod
     def getch_nonblocking() -> str | None:
+        """
+        Read a single character without blocking execution.
+
+        Checks whether input is available before attempting
+        to read from standard input.
+
+        Returns:
+            str | None:
+                The pressed key if available, otherwise None.
+        """
         ready, _, _ = select.select([sys.stdin], [], [], 0)
         if ready:
             return sys.stdin.read(1)

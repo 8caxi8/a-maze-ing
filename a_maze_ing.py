@@ -11,7 +11,7 @@ def main() -> None:
         gen = MazeGenerator(map.width, map.height, map.entry,
                             map.exit, map.seed, map.algorithm)
         gen.write_to_file(map.output_file)
-        drawer = MazeDrawer(gen)
+        drawer = MazeDrawer(gen, start_logo=False)
         drawer.start_engine()
     except (ParserError, MazeGeneratorError, DrawerError) as e:
         print(f"[ERROR]: {e}")
