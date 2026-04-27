@@ -60,13 +60,15 @@ class MazeAlgorithm(ABC):
         pass
 
     def make_imperfect_frames(self, maze: list[list[int]],
-                              probability: float = 0.05,
+                              probability: float = 0.08,
                               seed: int | None = None) \
             -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
 
         width: int = len(maze[0])
         height: int = len(maze)
         logo_cells: set[tuple[int, int]] = logo_42(width, height)
+        opened_walls: int = 0
+        possible_cells: set[tuple[int, int]] = set()
 
         rng = random.Random(seed)
 
@@ -97,32 +99,53 @@ class MazeAlgorithm(ABC):
                 if (x, y) in logo_cells:
                     continue
 
-                if x < width - 1 and rng.random() < probability:
+                if x < width - 1:
                     if (maze[y][x] & (1 << self.E) and
                             (x + 1, y) not in logo_cells):
-                        maze[y][x] &= ~(1 << self.E)
-                        maze[y][x + 1] &= ~(1 << self.W)
-                        if check_open_area(maze, width, height):
-                            maze[y][x] |= (1 << self.E)
-                            maze[y][x + 1] |= (1 << self.W)
+                        possible_cells.add((x, y))
+                        if rng.random() < probability:
+                            maze[y][x] &= ~(1 << self.E)
+                            maze[y][x + 1] &= ~(1 << self.W)
+                            opened_walls += 1
+                            if check_open_area(maze, width, height):
+                                maze[y][x] |= (1 << self.E)
+                                maze[y][x + 1] |= (1 << self.W)
+                                opened_walls -= 1
 
-                if y < height - 1 and rng.random() < probability:
+                if y < height - 1:
                     if (maze[y][x] & (1 << self.S) and
                             (x, y + 1) not in logo_cells):
-                        maze[y][x] &= ~(1 << self.S)
-                        maze[y + 1][x] &= ~(1 << self.N)
-                        if check_open_area(maze, width, height):
-                            maze[y][x] |= (1 << self.S)
-                            maze[y + 1][x] |= (1 << self.N)
+                        possible_cells.add((x, y))
+                        if rng.random() < probability:
+                            maze[y][x] &= ~(1 << self.S)
+                            maze[y + 1][x] &= ~(1 << self.N)
+                            opened_walls += 1
+                            if check_open_area(maze, width, height):
+                                maze[y][x] |= (1 << self.S)
+                                maze[y + 1][x] |= (1 << self.N)
+                                opened_walls -= 1
 
                 yield (x, y), maze
 
-    def make_imperfect(self, maze: list[list[int]], probability: float = 0.05,
+        if opened_walls == 0:
+            x, y = rng.choice(list(possible_cells))
+            if (maze[y][x] & (1 << self.E)):
+                maze[y][x] &= ~(1 << self.E)
+                maze[y][x + 1] &= ~(1 << self.W)
+            else:
+                maze[y][x] &= ~(1 << self.S)
+                maze[y + 1][x] &= ~(1 << self.N)
+
+            yield (x, y), maze
+
+    def make_imperfect(self, maze: list[list[int]], probability: float = 0.08,
                        seed: int | None = None) -> list[list[int]]:
 
         width: int = len(maze[0])
         height: int = len(maze)
         logo_cells: set[tuple[int, int]] = logo_42(width, height)
+        opened_walls: int = 0
+        possible_cells: set[tuple[int, int]] = set()
 
         rng = random.Random(seed)
 
@@ -153,23 +176,40 @@ class MazeAlgorithm(ABC):
                 if (x, y) in logo_cells:
                     continue
 
-                if x < width - 1 and rng.random() < probability:
+                if x < width - 1:
                     if (maze[y][x] & (1 << self.E) and
                             (x + 1, y) not in logo_cells):
-                        maze[y][x] &= ~(1 << self.E)
-                        maze[y][x + 1] &= ~(1 << self.W)
-                        if check_open_area(maze, width, height):
-                            maze[y][x] |= (1 << self.E)
-                            maze[y][x + 1] |= (1 << self.W)
+                        possible_cells.add((x, y))
+                        if rng.random() < probability:
+                            maze[y][x] &= ~(1 << self.E)
+                            maze[y][x + 1] &= ~(1 << self.W)
+                            opened_walls += 1
+                            if check_open_area(maze, width, height):
+                                maze[y][x] |= (1 << self.E)
+                                maze[y][x + 1] |= (1 << self.W)
+                                opened_walls -= 1
 
-                if y < height - 1 and rng.random() < probability:
+                if y < height - 1:
                     if (maze[y][x] & (1 << self.S) and
                             (x, y + 1) not in logo_cells):
-                        maze[y][x] &= ~(1 << self.S)
-                        maze[y + 1][x] &= ~(1 << self.N)
-                        if check_open_area(maze, width, height):
-                            maze[y][x] |= (1 << self.S)
-                            maze[y + 1][x] |= (1 << self.N)
+                        possible_cells.add((x, y))
+                        if rng.random() < probability:
+                            maze[y][x] &= ~(1 << self.S)
+                            maze[y + 1][x] &= ~(1 << self.N)
+                            opened_walls += 1
+                            if check_open_area(maze, width, height):
+                                maze[y][x] |= (1 << self.S)
+                                maze[y + 1][x] |= (1 << self.N)
+                                opened_walls -= 1
+
+        if opened_walls == 0:
+            x, y = rng.choice(list(possible_cells))
+            if (maze[y][x] & (1 << self.E)):
+                maze[y][x] &= ~(1 << self.E)
+                maze[y][x + 1] &= ~(1 << self.W)
+            else:
+                maze[y][x] &= ~(1 << self.S)
+                maze[y + 1][x] &= ~(1 << self.N)
 
         return maze
 
