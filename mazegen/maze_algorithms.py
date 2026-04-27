@@ -5,6 +5,20 @@ from collections import deque
 
 
 def logo_42(width: int, height: int) -> set[tuple[int, int]]:
+    """Generate the set of cells occupied by the 42 logo pattern.
+
+    The logo is centered in the maze and consists of two characters
+    ('4' and '2') made up of individual cells. Returns an empty set
+    if the maze is too small to fit the pattern.
+
+    Args:
+        width: Number of columns in the maze.
+        height: Number of rows in the maze.
+
+    Returns:
+        Set of (x, y) cell coordinates occupied by the 42 logo.
+        Returns an empty set if width < 9 or height < 7.
+    """
     logo_cells: set[tuple[int, int]] = set()
 
     if width < 9 or height < 7:
@@ -35,6 +49,27 @@ def logo_42(width: int, height: int) -> set[tuple[int, int]]:
 
 
 class MazeAlgorithm(ABC):
+    """Abstract base class for maze generation algorithms.
+
+    Defines the interface and shared functionality for all maze generation
+    strategies. Mazes are represented as 2D grids of integers where each
+    cell encodes its walls as a 4-bit integer:
+        - Bit 0 (N): North wall
+        - Bit 1 (E): East wall
+        - Bit 2 (S): South wall
+        - Bit 3 (W): West wall
+
+    A bit value of 1 means the wall is closed, 0 means it is open.
+    All cells start with value 0xF (all walls closed).
+
+    Class Attributes:
+        N: Bit index for the north wall.
+        E: Bit index for the east wall.
+        S: Bit index for the south wall.
+        W: Bit index for the west wall.
+        DIRS: List of (dx, dy, direction, opposite) tuples for all
+              four cardinal directions.
+    """
 
     N: int = 0
     E: int = 1
@@ -52,17 +87,64 @@ class MazeAlgorithm(ABC):
     def generate(self, width: int, height: int, seed: int | None = None) \
             -> Generator[tuple[list[list[int]],
                                list[tuple[int, int]]], None, None]:
+        """Generate a maze step by step, yielding intermediate states.
+
+        Args:
+            width: Number of columns in the maze.
+            height: Number of rows in the maze.
+            seed: Random seed for reproducible generation. If None,
+                  generation is non-deterministic.
+
+        Yields:
+            Tuples of (maze, state) where maze is the current 2D grid
+            and state is the algorithm's internal structure (e.g. stack
+            for DFS, candidates for PRIM) as a list of (x, y) positions.
+        """
         pass
 
     @abstractmethod
     def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
+        """Generate and return the completed maze.
+
+        Runs the generation algorithm to completion and returns the
+        final maze state.
+
+        Args:
+            width: Number of columns in the maze.
+            height: Number of rows in the maze.
+            seed: Random seed for reproducible generation. If None,
+                  generation is non-deterministic.
+
+        Returns:
+            Completed maze as a 2D list of integers encoding wall states.
+        """
         pass
 
     def make_imperfect_frames(self, maze: list[list[int]],
                               probability: float = 0.08,
                               seed: int | None = None) \
             -> Generator[tuple[tuple[int, int], list[list[int]]], None, None]:
+        """Randomly remove walls to create loops, yielding each step as a
+           frame.
+
+        Iterates over every eligible cell and independently tries to open
+        its east and south walls based on the given probability. Skips cells
+        inside the 42 logo pattern and reverts any removal that would create
+        a 3x3 open area. Guarantees at least one wall is opened by forcing
+        a removal if none occurred naturally. Modifies the maze in place.
+
+        Args:
+            maze: The maze to make imperfect, modified in place.
+            probability: Probability of opening each eligible wall.
+                         Must be between 0.0 and 1.0. Defaults to 0.08.
+            seed: Random seed for reproducible results. If None,
+                  results are non-deterministic.
+
+        Yields:
+            Tuples of ((x, y), maze) where (x, y) is the cell currently
+            being processed and maze is the current 2D grid state.
+        """
 
         width: int = len(maze[0])
         height: int = len(maze)
@@ -74,6 +156,16 @@ class MazeAlgorithm(ABC):
 
         def check_open_area(maze: list[list[int]], width: int, height: int) \
                 -> bool:
+            """Check if any 3x3 block in the maze is fully open.
+
+            Args:
+                maze: The current maze state.
+                width: Number of columns in the maze.
+                height: Number of rows in the maze.
+
+            Returns:
+                True if a 3x3 open area exists, False otherwise.
+            """
 
             for sx in range(width - 2):
                 for sy in range(height - 2):
@@ -140,6 +232,24 @@ class MazeAlgorithm(ABC):
 
     def make_imperfect(self, maze: list[list[int]], probability: float = 0.08,
                        seed: int | None = None) -> list[list[int]]:
+        """Randomly remove walls to create loops and return the modified maze.
+
+        Iterates over every eligible cell and independently tries to open
+        its east and south walls based on the given probability. Skips cells
+        inside the 42 logo pattern and reverts any removal that would create
+        a 3x3 open area. Guarantees at least one wall is opened by forcing
+        a removal if none occurred naturally. Modifies the maze in place.
+
+        Args:
+            maze: The maze to make imperfect, modified in place.
+            probability: Probability of opening each eligible wall.
+                         Must be between 0.0 and 1.0. Defaults to 0.08.
+            seed: Random seed for reproducible results. If None,
+                  results are non-deterministic.
+
+        Returns:
+            The modified maze with at least one additional passage created.
+        """
 
         width: int = len(maze[0])
         height: int = len(maze)
@@ -151,6 +261,16 @@ class MazeAlgorithm(ABC):
 
         def check_open_area(maze: list[list[int]], width: int, height: int) \
                 -> bool:
+            """Check if any 3x3 block in the maze is fully open.
+
+            Args:
+                maze: The current maze state.
+                width: Number of columns in the maze.
+                height: Number of rows in the maze.
+
+            Returns:
+                True if a 3x3 open area exists, False otherwise.
+            """
 
             for sx in range(width - 2):
                 for sy in range(height - 2):
@@ -217,6 +337,29 @@ class MazeAlgorithm(ABC):
                     entry: tuple[int, int], exit: tuple[int, int]) \
             -> Generator[tuple[list[tuple[int, int]],
                                list[tuple[int, int]]], None, None]:
+        """Animate BFS pathfinding, yielding search progress and path frames.
+
+        Yields two phases of animation:
+        - Phase 1 (search): As BFS explores the maze, yields the growing
+          list of visited cells with an empty path list each step.
+        - Phase 2 (reconstruction): Once the exit is found, yields the
+          growing reconstructed path from exit back to entry, one cell
+          at a time.
+
+        Args:
+            maze: The maze to search as a 2D grid of wall-encoded integers.
+            width: Number of columns in the maze.
+            height: Number of rows in the maze.
+            entry: Starting position as (x, y).
+            exit: Target position as (x, y).
+
+        Yields:
+            Tuples of (searched, path) where searched is the list of all
+            cells visited so far and path is the current reconstructed path.
+            During phase 1, path is an empty list. During phase 2, path
+            grows from exit toward entry. A final (searched, []) is yielded
+            if no path exists.
+        """
 
         queue: deque[tuple[int, int]] = deque([entry])
         searched: list[tuple[int, int]] = []
@@ -254,6 +397,21 @@ class MazeAlgorithm(ABC):
     def bfs(self, maze: list[list[int]], width: int, height: int,
             entry: tuple[int, int], exit: tuple[int, int]) \
             -> list[tuple[int, int]]:
+        """Find the shortest path between entry and exit using BFS.
+
+        Delegates to bfs_animate and returns only the final path.
+
+        Args:
+            maze: The maze to search as a 2D grid of wall-encoded integers.
+            width: Number of columns in the maze.
+            height: Number of rows in the maze.
+            entry: Starting position as (x, y).
+            exit: Target position as (x, y).
+
+        Returns:
+            List of (x, y) positions from entry to exit representing the
+            shortest path. Returns an empty list if no path exists.
+        """
 
         final_path: list[tuple[int, int]] = []
         for searched, path in self.bfs_animate(maze, width, height,
@@ -263,9 +421,36 @@ class MazeAlgorithm(ABC):
 
 
 class DFSAlgorithm(MazeAlgorithm):
+    """Maze generation using iterative Depth First Search.
+
+    Generates mazes with long winding corridors and few dead ends by
+    always extending the current path before backtracking. Uses an
+    explicit stack instead of recursion to avoid Python's recursion
+    limit on large mazes.
+
+    The 42 logo cells are pre-added to visited to prevent the algorithm
+    from carving through them, preserving the logo pattern in the maze.
+    """
     def generate(self, width: int, height: int, seed: int | None = None) \
             -> Generator[tuple[list[list[int]],
                                list[tuple[int, int]]], None, None]:
+        """Generate a maze using iterative DFS, yielding each step.
+
+        Starts at (0, 0) and carves passages by visiting unvisited
+        neighbours randomly, backtracking when no unvisited neighbours
+        remain. Skips cells inside the 42 logo pattern.
+
+        Args:
+            width: Number of columns in the maze.
+            height: Number of rows in the maze.
+            seed: Random seed for reproducible generation. If None,
+                  generation is non-deterministic.
+
+        Yields:
+            Tuples of (maze, stack) where maze is the current 2D grid
+            and stack is the current DFS path as a list of (x, y) positions.
+            The stack shrinks during backtracking and grows during exploration.
+        """
 
         rng = random.Random(seed)
 
@@ -305,6 +490,19 @@ class DFSAlgorithm(MazeAlgorithm):
 
     def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
+        """Generate and return the completed DFS maze.
+
+        Runs the DFS generator to completion and returns the final state.
+
+        Args:
+            width: Number of columns in the maze.
+            height: Number of rows in the maze.
+            seed: Random seed for reproducible generation. If None,
+                  generation is non-deterministic.
+
+        Returns:
+            Completed maze as a 2D list of wall-encoded integers.
+        """
 
         final_frame: list[list[int]] = []
         for maze_state, stack in self.generate(width, height, seed):
@@ -313,9 +511,39 @@ class DFSAlgorithm(MazeAlgorithm):
 
 
 class PRIMSAlgorithm(MazeAlgorithm):
+    """Maze generation using a randomized Prim's algorithm.
+
+    Generates mazes with a more uniform, branchy texture compared to DFS
+    by randomly selecting any cell from the frontier rather than always
+    extending the current path. Produces a random spanning tree where
+    every cell is reachable and there are no loops.
+
+    The 42 logo cells are pre-added to visited to prevent the algorithm
+    from carving through them, preserving the logo pattern in the maze.
+    """
     def generate(self, width: int, height: int, seed: int | None = None) \
         -> Generator[tuple[list[list[int]],
                            list[tuple[int, int]]], None, None]:
+        """Generate a maze using randomized Prim's algorithm, yielding each
+        step.
+
+        Starts at (0, 0) and maintains a candidate list of unvisited cells
+        adjacent to the visited region. At each step, picks a random candidate,
+        connects it to a random visited non-logo neighbour, then adds its
+        unvisited non-logo neighbours to the candidates list.
+
+        Args:
+            width: Number of columns in the maze.
+            height: Number of rows in the maze.
+            seed: Random seed for reproducible generation. If None,
+                  generation is non-deterministic.
+
+        Yields:
+            Tuples of (maze, candidates) where maze is the current 2D grid
+            and candidates is the current frontier as a list of (x, y)
+            positions. The candidates list grows as new cells are discovered
+            and shrinks as cells are connected to the maze.
+        """
         rng = random.Random(seed)
 
         logo_cells: set[tuple[int, int]] = logo_42(width, height)
@@ -371,6 +599,19 @@ class PRIMSAlgorithm(MazeAlgorithm):
 
     def final_maze(self, width: int, height: int, seed: int | None = None) \
             -> list[list[int]]:
+        """Generate and return the completed Prim's maze.
+
+        Runs the Prim's generator to completion and returns the final state.
+
+        Args:
+            width: Number of columns in the maze.
+            height: Number of rows in the maze.
+            seed: Random seed for reproducible generation. If None,
+                  generation is non-deterministic.
+
+        Returns:
+            Completed maze as a 2D list of wall-encoded integers.
+        """
 
         final_frame: list[list[int]] = []
         for maze_state, stack in self.generate(width, height, seed):
