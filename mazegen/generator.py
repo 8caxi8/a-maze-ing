@@ -40,6 +40,12 @@ class MazeGenerator:
     def get_perfect_status(self) -> bool:
         return self._perfect
 
+    def get_strategy(self) -> str:
+        return self._strategy.__class__.__name__
+
+    def get_maze_seed(self) -> int:
+        return self._seed
+
     def _set_maze_dimensions(self, width: int, height: int) -> None:
         try:
             if int(width) < 1 or int(height) < 1:
@@ -152,20 +158,19 @@ class MazeGenerator:
 
     def get_path_directions(self) -> str:
         path: list[tuple[int, int]] = self.find_shortest_path()
-        path_directions: list[str] = []
+        result: str = ""
 
         if path:
             for i in range(len(path) - 1):
                 if path[i + 1][0] - path[i][0] == 1:
-                    path_directions.append("E")
+                    result += "E"
                 elif path[i + 1][0] - path[i][0] == -1:
-                    path_directions.append("W")
+                    result += "W"
                 elif path[i + 1][1] - path[i][1] == 1:
-                    path_directions.append("S")
+                    result += "S"
                 elif path[i + 1][1] - path[i][1] == -1:
-                    path_directions.append("N")
+                    result += "N"
 
-        result: str = "".join(path_directions)
         return result
 
     def get_entry_exit_positions(self) -> list[tuple[int, int]]:
