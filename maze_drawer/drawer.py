@@ -157,7 +157,7 @@ class MazeDrawer():
         rendered_height = height * 2 + 1 + MIN_ROWS
 
         if rendered_width > cols or rendered_height > rows:
-            raise DrawerError(f"Terminal size {cols, rows}too small to render"
+            raise DrawerError(f"Terminal size {cols, rows} too small to render"
                               " the maze! Need at least: "
                               f"{rendered_width, rendered_height}!")
 

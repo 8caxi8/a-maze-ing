@@ -118,6 +118,39 @@ We chose DFS as the default because it produces more visually interesting mazes 
 
 For pathfinding, BFS (Breadth-First Search) is used since it guarantees the shortest path between entry and exit.
 
+| DFS demo | PRIM demo |
+|----------|-----------|
+|![Maze Demo](assets/dfs.gif)|![Maze Demo](assets/prim.gif)|
+
+## Pathfinding — BFS
+
+BFS (Breadth-First Search) is used to find the shortest path between the entry and exit points. It works by exploring the maze level by level — starting from the entry cell, it visits all reachable neighbours before moving deeper, which guarantees the first time it reaches the exit it has found the shortest possible route.
+
+The implementation uses a queue to track which cells to visit next, a `visited` set to avoid revisiting cells, and a `parent` dictionary to reconstruct the path once the exit is found. Wall data is read directly from the hex-encoded maze grid — a cell's walls are checked by testing the relevant bit before moving in any direction:
+
+```python
+if not (maze[cell[1]][cell[0]] & 1 << direction):
+    # wall is open, we can move in this direction
+```
+
+![Maze Demo](assets/bfs.gif)
+
+## Making a Maze Imperfect
+
+A perfect maze has exactly one path between any two cells. Making it imperfect means selectively removing walls to create loops and multiple routes, which makes it harder to solve since dead ends can become shortcuts.
+
+The algorithm works as follows:
+
+1. Iterates over every eligible cell (skipping cells inside the 42 pattern)
+2. For each cell, independently rolls against a probability (default `0.08`) for its east and south walls
+3. If the roll succeeds and the wall exists, the wall is removed
+4. A 3x3 open area check is immediately run — if removing the wall would create a fully open 3x3 region (forbidden by the subject rules), the wall is restored
+5. At least one wall is guaranteed to be opened — if no walls were removed naturally, one is forced
+
+The seed is passed to a local `random.Random` instance so results are fully reproducible independently of any other random state in the program.
+
+![Maze Demo](assets/imp.gif)
+
 ## Code Reusability — `mazegen` Package
 
 The `mazegen` package is fully self-contained and can be installed independently:
